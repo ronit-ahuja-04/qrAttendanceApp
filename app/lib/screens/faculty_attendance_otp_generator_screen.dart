@@ -64,7 +64,7 @@ class _FacultyAttendanceOtpGeneratorScreenState
     try {
       var session = await AmsGlobals.sessionService.createSession(
         courseCode: widget.subjectTitle,
-        facultyId: 'FACDEV1',
+        facultyId: AmsGlobals.loggedInUser?.id ?? 'faculty-01',
         enrolledStudentIds: List.generate(26, (i) => 'student-${i.toString().padLeft(2, '0')}'),
       );
       

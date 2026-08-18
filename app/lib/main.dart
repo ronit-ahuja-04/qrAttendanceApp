@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_colors.dart';
+import 'ams/notification_service.dart';
 
-void main() {
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().init(navigatorKey);
   runApp(const AttendancePortalApp());
 }
 
@@ -12,6 +17,7 @@ class AttendancePortalApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'VESIT Attendance Portal',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

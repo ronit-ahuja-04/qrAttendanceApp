@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -6,22 +7,58 @@ import 'attendance_history_screen.dart';
 import 'otp_verification_screen.dart';
 import 'student_profile_screen.dart';
 import 'notifications_screen.dart';
+import '../ams/globals.dart';
+import '../ams/notification_service.dart';
 
-class _SessionItem {
-  const _SessionItem({required this.subject, required this.location, required this.time});
-
-  final String subject;
-  final String location;
-  final String time;
-}
-
-class StudentDashboardScreen extends StatelessWidget {
+class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
 
-  static const _sessions = [
-    _SessionItem(subject: 'Software Engineering', location: 'Room 402', time: '11:30 AM'),
-    _SessionItem(subject: 'Mobile Computing', location: 'Lab 3', time: '02:30 PM'),
-  ];
+  @override
+  State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  bool _isLoading = true;
+  double _overallPercentage = 0.0;
+  double _thisWeekPercentage = 0.0;
+  List<dynamic> _subjects = [];
+  StreamSubscription? _eventSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+    _eventSub = NotificationService().events.listen((event) {
+      if (event['type'] == 'N003' || event['type'] == 'N005') {
+        _fetchStats();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _eventSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchStats() async {
+    final userId = AmsGlobals.loggedInUser?.id;
+    if (userId != null) {
+      final stats = await AmsGlobals.attendanceService.getStudentStats(userId);
+      if (mounted) {
+        setState(() {
+          _overallPercentage = stats['overallPercentage'] ?? 0.0;
+          _thisWeekPercentage = stats['thisWeekPercentage'] ?? 0.0;
+          _subjects = stats['subjects'] ?? [];
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   void _comingSoon(BuildContext context, String label) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -47,41 +84,49 @@ class StudentDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    children: [
-                      _SectionHeader(icon: null, ledDot: true, title: 'Attendance Overview'),
-                      const SizedBox(height: 10),
-                      const Row(
-                        children: [
-                          Expanded(child: _StatCard(label: 'Overall', value: '89%')),
-                          SizedBox(width: 16),
-                          Expanded(child: _StatCard(label: 'This Week', value: '94%')),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _HistoryRow(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen()),
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          children: [
+                            _SectionHeader(icon: null, ledDot: true, title: 'Attendance Overview'),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(child: _StatCard(label: 'Overall', value: '${_overallPercentage.toStringAsFixed(1)}%')),
+                                const SizedBox(width: 16),
+                                Expanded(child: _StatCard(label: 'This Week', value: '${_thisWeekPercentage.toStringAsFixed(1)}%')),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _HistoryRow(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen()),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            _MarkAttendanceButton(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const OtpVerificationScreen()),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            _SectionHeader(icon: Icons.menu_book, title: 'Registered Subjects'),
+                            const SizedBox(height: 10),
+                            if (_subjects.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text('No registered subjects found.', style: AppTextStyles.bodyLg),
+                              )
+                            else
+                              ..._subjects.map(
+                                (s) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _SubjectCard(subjectData: s),
+                                ),
+                              ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _MarkAttendanceButton(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const OtpVerificationScreen()),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionHeader(icon: Icons.schedule_outlined, title: 'Upcoming Sessions'),
-                      const SizedBox(height: 10),
-                      ..._sessions.map(
-                        (s) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _SessionCard(item: s),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -297,38 +342,59 @@ class _MarkAttendanceButtonState extends State<_MarkAttendanceButton> {
   }
 }
 
-class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.item});
+class _SubjectCard extends StatelessWidget {
+  const _SubjectCard({required this.subjectData});
 
-  final _SessionItem item;
+  final Map<String, dynamic> subjectData;
 
   @override
   Widget build(BuildContext context) {
+    final courseCode = subjectData['courseCode'] ?? 'Unknown';
+    final overall = (subjectData['overallPercentage'] as num?)?.toDouble() ?? 0.0;
+    final thisWeek = (subjectData['thisWeekPercentage'] as num?)?.toDouble() ?? 0.0;
+
     return RaisedPanel(
       borderRadius: 16,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.subject, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.onSurface)),
-                const SizedBox(height: 4),
-                Row(
+          Row(
+            children: [
+              const Icon(Icons.class_outlined, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  courseCode, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.onSurface)
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 14, color: AppColors.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Text(item.location, style: AppTextStyles.labelMd.copyWith(fontSize: 13)),
+                    Text('OVERALL', style: AppTextStyles.labelSm.copyWith(color: AppColors.onSurfaceVariant)),
+                    const SizedBox(height: 4),
+                    Text('${overall.toStringAsFixed(1)}%', style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary, fontSize: 20)),
                   ],
                 ),
-              ],
-            ),
-          ),
-          DebossedWell(
-            borderRadius: 8,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(item.time, style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurface, fontSize: 13)),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('THIS WEEK', style: AppTextStyles.labelSm.copyWith(color: AppColors.onSurfaceVariant)),
+                    const SizedBox(height: 4),
+                    Text('${thisWeek.toStringAsFixed(1)}%', style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary, fontSize: 20)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

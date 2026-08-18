@@ -7,6 +7,7 @@ import 'configure_otp_screen.dart';
 import 'faculty_notifications_screen.dart';
 import 'faculty_profile_screen.dart';
 import 'login_screen.dart';
+import 'generate_report_screen.dart';
 
 /// The faculty landing screen — mirrors the "faculty_node_dashboard_compact"
 /// Stitch mockup: a profile header (avatar + online LED + notification
@@ -73,7 +74,9 @@ class FacultyDashboardScreen extends StatelessWidget {
                         icon: Icons.bar_chart_outlined,
                         title: 'Generate Report',
                         subtitle: 'Export attendance sheets & student logs',
-                        onTap: () => _comingSoon(context, 'Report generation'),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const GenerateReportScreen()),
+                        ),
                       ),
                     ),
                   ],

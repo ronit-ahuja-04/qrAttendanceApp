@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'models.dart';
+import 'notification_service.dart';
 
 const String baseUrl = 'http://127.0.0.1:3000';
 
@@ -18,7 +19,9 @@ class ApiSessionService {
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        return User.fromJson(body);
+        final user = User.fromJson(body);
+        NotificationService().connectSse(user.id);
+        return user;
       }
       print('LOGIN HTTP ERROR: ${response.statusCode} - ${response.body}');
       return null;
@@ -93,6 +96,21 @@ class ApiSessionService {
       return _parseSession(jsonDecode(response.body));
     }
     return null;
+  }
+
+  Future<List<AttendanceSession>> getFacultySessions(String facultyId) async {
+    try {
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+      final response = await http.get(Uri.parse('$baseUrl/sessions/faculty/${Uri.encodeComponent(facultyId)}?_t=$cacheBuster'));
+      if (response.statusCode == 200) {
+        final List<dynamic> body = jsonDecode(response.body);
+        return body.map((r) => _parseSession(r)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('GET FACULTY SESSIONS EXCEPTION: $e');
+      return [];
+    }
   }
   Future<List<Map<String, dynamic>>> getVerificationList(String sessionId) async {
     try {
@@ -174,6 +192,24 @@ class ApiAttendanceService {
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> getStudentStats(String studentId) async {
+    try {
+      final t = DateTime.now().millisecondsSinceEpoch;
+      final response = await http.get(Uri.parse('$baseUrl/students/$studentId/stats?_t=$t'));
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return {
+          'overallPercentage': (body['overallPercentage'] as num).toDouble(),
+          'thisWeekPercentage': (body['thisWeekPercentage'] as num).toDouble(),
+          'subjects': body['subjects'] as List<dynamic>? ?? [],
+        };
+      }
+      return {'overallPercentage': 0.0, 'thisWeekPercentage': 0.0, 'subjects': []};
+    } catch (e) {
+      return {'overallPercentage': 0.0, 'thisWeekPercentage': 0.0, 'subjects': []};
     }
   }
 }
