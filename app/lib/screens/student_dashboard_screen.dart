@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
-import 'attendance_history_screen.dart';
+import 'attendance_statistics_screen.dart';
 import 'otp_verification_screen.dart';
 import 'student_profile_screen.dart';
 import 'notifications_screen.dart';
@@ -98,12 +98,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                                 Expanded(child: _StatCard(label: 'This Week', value: '${_thisWeekPercentage.toStringAsFixed(1)}%')),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            _HistoryRow(
+                            const SizedBox(height: 12),
+                            _StatisticsRow(
                               onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen()),
+                                MaterialPageRoute(builder: (_) => const AttendanceStatisticsScreen()),
                               ),
                             ),
+
                             const SizedBox(height: 24),
                             _MarkAttendanceButton(
                               onTap: () => Navigator.of(context).push(
@@ -259,8 +260,8 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.onTap});
+class _StatisticsRow extends StatelessWidget {
+  const _StatisticsRow({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -274,11 +275,11 @@ class _HistoryRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            const Icon(Icons.history, color: AppColors.primary, size: 24),
+            const Icon(Icons.insights, color: AppColors.primary, size: 24),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'VIEW ATTENDANCE HISTORY',
+                'VIEW STATISTICS & INSIGHTS',
                 style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurface, letterSpacing: 1.2),
               ),
             ),

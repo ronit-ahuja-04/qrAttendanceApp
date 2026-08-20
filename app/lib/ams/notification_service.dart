@@ -10,6 +10,7 @@ import '../screens/attendance_history_screen.dart';
 import '../screens/faculty_dashboard_screen.dart';
 import '../screens/generate_report_screen.dart';
 import '../theme/app_colors.dart';
+import 'api_services.dart' show baseUrl;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -117,7 +118,6 @@ class NotificationService {
   Stream<Map<String, dynamic>> get events => _eventController.stream;
 
   void connectSse(String userId) async {
-    final baseUrl = 'http://127.0.0.1:3000'; 
     try {
       final request = http.Request('GET', Uri.parse('$baseUrl/notifications/stream?userId=$userId'));
       final response = await request.send();

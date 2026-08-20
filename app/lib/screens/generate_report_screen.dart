@@ -3,7 +3,11 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../ams/globals.dart';
 import '../ams/models.dart';
+import 'dart:io';
 import 'dart:convert';
+import 'package:excel/excel.dart' as excel;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class GenerateReportScreen extends StatefulWidget {
   const GenerateReportScreen({super.key});
@@ -129,8 +133,9 @@ class _SessionCard extends StatelessWidget {
 class _Header extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
+  final Widget? trailing;
 
-  const _Header({required this.title, required this.onBack});
+  const _Header({required this.title, required this.onBack, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +155,7 @@ class _Header extends StatelessWidget {
               style: AppTextStyles.headlineSm,
             ),
           ),
-          const SizedBox(width: 48), // Balance for centering
+          trailing ?? const SizedBox(width: 48), // Balance for centering
         ],
       ),
     );
@@ -185,6 +190,53 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
+  Future<void> _exportToExcel() async {
+    try {
+      final excelFile = excel.Excel.createExcel();
+      final sheet = excelFile['Sheet1'];
+      
+      // Header row
+      sheet.appendRow([
+        excel.TextCellValue('Name'),
+        excel.TextCellValue('Roll No'),
+        excel.TextCellValue('Status'),
+        excel.TextCellValue('Method')
+      ]);
+      
+      // Data rows
+      for (final student in _students) {
+        sheet.appendRow([
+          excel.TextCellValue(student['name'] ?? 'Unknown'),
+          excel.TextCellValue(student['rollNo'] ?? 'N/A'),
+          excel.TextCellValue(student['status'] ?? 'absent'),
+          excel.TextCellValue(student['method'] ?? ''),
+        ]);
+      }
+      
+      // Save file
+      final bytes = excelFile.encode();
+      if (bytes != null) {
+        final dir = await getApplicationDocumentsDirectory();
+        final path = '${dir.path}/Report_${widget.session.courseCode}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(bytes);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Report saved to $path')),
+          );
+        }
+        OpenFile.open(path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to export report: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final presentCount = _students.where((s) => s['status'] == 'present').length;
@@ -198,6 +250,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             _Header(
               title: '${widget.session.courseCode} Report',
               onBack: () => Navigator.of(context).pop(),
+              trailing: IconButton(
+                icon: const Icon(Icons.download, color: AppColors.primary),
+                onPressed: _exportToExcel,
+                tooltip: 'Export to Excel',
+              ),
             ),
             if (_isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))

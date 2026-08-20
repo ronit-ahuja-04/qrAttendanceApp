@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
-import 'registration_screen.dart';
 import 'faculty_dashboard_screen.dart';
 import 'student_dashboard_screen.dart';
 import 'change_password_screen.dart';
@@ -64,12 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
         const SnackBar(content: Text('Invalid email or password.')),
       );
     }
-  }
-
-  void _goToRegistration() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RegistrationScreen(role: _role)),
-    );
   }
 
   @override
@@ -138,22 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Text('Forgot Password?', style: AppTextStyles.labelMd),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text("Don't have an account? ", style: AppTextStyles.labelMd),
-                                GestureDetector(
-                                  onTap: _goToRegistration,
-                                  child: Text(
-                                    'Create one',
-                                    style: AppTextStyles.labelMd.copyWith(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+
                           ],
                         ),
                       ),

@@ -119,7 +119,7 @@ class _ConfigureOtpScreenState extends State<ConfigureOtpScreen> {
                     ),
                     const SizedBox(height: 24),
                     PushableButton(
-                      label: 'Generate OTP',
+                      label: 'Generate QR',
                       icon: Icons.lock_reset,
                       onPressed: _generateOtp,
                     ),
@@ -168,7 +168,7 @@ class _ConfigureOtpHeader extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              'CONFIGURE OTP',
+              'CONFIGURE QR',
               textAlign: TextAlign.center,
               style: AppTextStyles.headlineSm.copyWith(
                 color: AppColors.primary,

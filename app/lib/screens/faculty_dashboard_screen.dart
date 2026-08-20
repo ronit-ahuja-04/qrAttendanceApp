@@ -2,20 +2,16 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
-import 'compose_announcement_screen.dart';
 import 'configure_otp_screen.dart';
-import 'faculty_notifications_screen.dart';
 import 'faculty_profile_screen.dart';
 import 'login_screen.dart';
-import 'generate_report_screen.dart';
+import 'report_filters_screen.dart';
 
 /// The faculty landing screen — mirrors the "faculty_node_dashboard_compact"
-/// Stitch mockup: a profile header (avatar + online LED + notification
-/// bell) followed by three stacked action hubs (Generate Attendance OTP,
-/// Announcements, Generate Report).
+/// Stitch mockup: a profile header (avatar + online LED) followed by two
+/// stacked action hubs (Generate Attendance QR, Generate Report).
 ///
-/// "Generate Attendance OTP" routes into [ConfigureOtpScreen]; the other
-/// two hubs still just show a "coming soon" snack for now.
+/// "Generate Attendance QR" routes into [ConfigureOtpScreen].
 class FacultyDashboardScreen extends StatelessWidget {
   const FacultyDashboardScreen({super.key});
 
@@ -33,9 +29,6 @@ class FacultyDashboardScreen extends StatelessWidget {
         child: Column(
           children: [
             _FacultyHeader(
-              onNotificationsTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FacultyNotificationsScreen()),
-              ),
               onAvatarTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const FacultyProfileScreen()),
               ),
@@ -49,7 +42,7 @@ class FacultyDashboardScreen extends StatelessWidget {
                       child: _ActionHub(
                         icon: Icons.vpn_key,
                         iconFilled: true,
-                        title: 'Generate Attendance OTP',
+                        title: 'Generate Attendance QR',
                         subtitle: 'Start a 12-second dynamic verification session',
                         highlighted: true,
                         onTap: () => Navigator.of(context).push(
@@ -60,22 +53,11 @@ class FacultyDashboardScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Expanded(
                       child: _ActionHub(
-                        icon: Icons.campaign_outlined,
-                        title: 'Announcements',
-                        subtitle: 'Broadcast updates to classes or department',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ComposeAnnouncementScreen()),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: _ActionHub(
                         icon: Icons.bar_chart_outlined,
                         title: 'Generate Report',
                         subtitle: 'Export attendance sheets & student logs',
                         onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const GenerateReportScreen()),
+                          MaterialPageRoute(builder: (_) => const ReportFiltersScreen()),
                         ),
                       ),
                     ),
@@ -91,9 +73,8 @@ class FacultyDashboardScreen extends StatelessWidget {
 }
 
 class _FacultyHeader extends StatelessWidget {
-  const _FacultyHeader({required this.onNotificationsTap, required this.onAvatarTap});
+  const _FacultyHeader({required this.onAvatarTap});
 
-  final VoidCallback onNotificationsTap;
   final VoidCallback onAvatarTap;
 
   @override
@@ -164,33 +145,6 @@ class _FacultyHeader extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              PushSurfaceButton(
-                onPressed: onNotificationsTap,
-                borderRadius: 12,
-                child: const Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Icon(Icons.notifications_outlined, color: AppColors.onSurfaceVariant),
-                ),
-              ),
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.error,
-                    boxShadow: [BoxShadow(color: Color(0x80BA1A1A), blurRadius: 4)],
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -198,7 +152,7 @@ class _FacultyHeader extends StatelessWidget {
 }
 
 /// One of the three stacked action cards on the faculty dashboard. The
-/// "highlighted" variant (used for Generate Attendance OTP) gets an amber
+/// "highlighted" variant (used for Generate Attendance QR) gets an amber
 /// outline, a top accent line, and a filled/badged icon — matching the
 /// primary hub in the Stitch mockup.
 class _ActionHub extends StatefulWidget {

@@ -248,7 +248,7 @@ class _GeneratorHeader extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              'Generate Attendance OTP',
+              'Generate Attendance QR',
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -364,7 +364,7 @@ class _ClassDetailsCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Dynamic OTP Auto-Refresh',
+                  'Dynamic QR Auto-Refresh',
                   style: AppTextStyles.labelMd.copyWith(color: AppColors.onSurface),
                 ),
               ),
@@ -461,7 +461,7 @@ class _OtpLiveCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('OTP EXPIRES IN:', style: AppTextStyles.labelSm),
+              Text('QR EXPIRES IN:', style: AppTextStyles.labelSm),
               Text(
                 '00:${secondsLeft.toString().padLeft(2, '0')}s',
                 style: AppTextStyles.labelBold.copyWith(color: AppColors.error, fontSize: 14),

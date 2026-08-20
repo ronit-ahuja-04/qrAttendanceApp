@@ -174,21 +174,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 28),
-                    Opacity(
-                      opacity: 0.6,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.location_on_outlined, size: 16, color: AppColors.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Current Zone: Room 402, North Wing',
-                            style: AppTextStyles.labelMd.copyWith(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
+
                   ],
                 ),
               ),
@@ -231,7 +217,7 @@ class _Header extends StatelessWidget {
           Text('Verify Attendance', style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary)),
           const SizedBox(height: 4),
           Text(
-            'Enter the OTP broadcasted by your instructor',
+            'Scan the QR broadcasted by your instructor',
             style: AppTextStyles.labelMd.copyWith(fontSize: 12),
             textAlign: TextAlign.center,
           ),

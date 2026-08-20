@@ -3,7 +3,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
 import 'account_settings_screen.dart';
-import 'faculty_notifications_screen.dart';
 import 'login_screen.dart';
 import 'update_profile_picture_screen.dart';
 
@@ -27,11 +26,7 @@ class FacultyProfileScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            _Header(
-              onNotifications: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FacultyNotificationsScreen()),
-              ),
-            ),
+            const _Header(),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
@@ -79,9 +74,7 @@ class FacultyProfileScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onNotifications});
-
-  final VoidCallback onNotifications;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
@@ -105,10 +98,7 @@ class _Header extends StatelessWidget {
               style: AppTextStyles.headlineMd.copyWith(color: AppColors.primary),
             ),
           ),
-          IconButton(
-            onPressed: onNotifications,
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.onSurfaceVariant),
-          ),
+          const SizedBox(width: 48),
         ],
       ),
     );

@@ -3,7 +3,11 @@ import 'package:http/http.dart' as http;
 import 'models.dart';
 import 'notification_service.dart';
 
-const String baseUrl = 'http://127.0.0.1:3000';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+String get baseUrl {
+  return 'http://127.0.0.1:3000';
+}
 
 class ApiSessionService {
   Future<User?> login(String email, String password) async {
@@ -11,22 +15,16 @@ class ApiSessionService {
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
+        body: jsonEncode({'email': email, 'password': password}),
       );
-
       if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final user = User.fromJson(body);
+        final user = User.fromJson(jsonDecode(response.body));
         NotificationService().connectSse(user.id);
         return user;
       }
-      print('LOGIN HTTP ERROR: ${response.statusCode} - ${response.body}');
       return null;
     } catch (e) {
-      print('LOGIN EXCEPTION: $e');
+      print('LOGIN ERROR: $e');
       return null;
     }
   }
