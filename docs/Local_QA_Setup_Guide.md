@@ -29,7 +29,12 @@ The Flutter mobile app needs the backend server running locally to function.
    cd backend
    npm install
    ```
-2. **Start the Server:**
+2. **🚨 Secure the Firebase Credentials 🚨**
+   The backend relies on Google Cloud Firebase Cloud Messaging (FCM) to send Push Notifications. For security reasons, the credentials file is **not** on GitHub.
+   *   **Action:** Contact the project lead (Ronit) to receive the `firebase-service-account.json` file via a secure channel (Slack/Password Manager).
+   *   **Placement:** Place the downloaded file directly inside the `backend/` folder on your local machine.
+
+3. **Start the Server:**
    ```bash
    node index.js
    ```
