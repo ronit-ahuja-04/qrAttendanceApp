@@ -1,0 +1,19 @@
+◇ injected env (2) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Firebase Admin SDK initialized successfully.
+Backend listening on port 3000 (0.0.0.0)
+PUT timetable id: 6152976c-d409-44ea-8913-8a04f14cfb7f body: {
+  day: 'Fri',
+  subject: 'Full stack',
+  batchTarget: 'D15A - Batch C',
+  type: 'Lab',
+  venue: '512',
+  startTime: '15:29',
+  endTime: '17:29',
+  facultyId: 'fac-ps'
+}
+Successfully sent FCM message: projects/attendance-monitoring-sy-89218/messages/0:1787910472423479%b1b6c8d1b1b6c8d1
+Successfully sent FCM message: projects/attendance-monitoring-sy-89218/messages/0:1787910540176303%b1b6c8d1b1b6c8d1
+PUT timetable id: 6152976c-d409-44ea-8913-8a04f14cfb7f body: undefined
+Successfully sent FCM message: projects/attendance-monitoring-sy-89218/messages/0:1787910614295329%b1b6c8d1b1b6c8d1
+PUT timetable id: cff6727d-78e4-44d6-9d4b-37a98152f0aa body: undefined
+Successfully sent FCM message: projects/attendance-monitoring-sy-89218/messages/0:1787911597088522%b1b6c8d1b1b6c8d1

@@ -33,3 +33,8 @@ app/build/
 app/.dart_tool/
 app/android/.gradle/
 app/android/app/build/
+
+# Graphify
+graphify-out/cache/
+backend/firebase-service-account.json
+backend/temp_key*

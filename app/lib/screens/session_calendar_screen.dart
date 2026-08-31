@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
+import '../widgets/vesit_widgets.dart';
 
 enum _MarkStatus { present, missed }
 
@@ -90,7 +91,7 @@ class _SessionCalendarScreenState extends State<SessionCalendarScreen> {
 
   int _selectedDay = 24;
 
-  List<_DaySession> get _selectedSessions => _sessions[_selectedDay] ?? const [];
+  List<_DaySession> get _selectedSessions => _sessions[_selectedDay] ?? [];
 
   void _openMonthPicker() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -101,7 +102,7 @@ class _SessionCalendarScreenState extends State<SessionCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.wall,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
         child: Stack(
           children: [
@@ -124,7 +125,7 @@ class _SessionCalendarScreenState extends State<SessionCalendarScreen> {
                       const SizedBox(height: 24),
                       Text(
                         'SESSIONS FOR OCT $_selectedDay, 2026',
-                        style: AppTextStyles.headlineSm.copyWith(fontSize: 18),
+                        style: context.textStyles.vesitHeadlineSm.copyWith(fontSize: 18),
                       ),
                       const SizedBox(height: 10),
                       if (_selectedSessions.isEmpty)
@@ -132,7 +133,7 @@ class _SessionCalendarScreenState extends State<SessionCalendarScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           child: Text(
                             'No sessions recorded for this day.',
-                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                            style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600),
                           ),
                         )
                       else
@@ -147,10 +148,7 @@ class _SessionCalendarScreenState extends State<SessionCalendarScreen> {
                 ),
               ],
             ),
-            const Align(
-              alignment: Alignment.bottomCenter,
-              child: TactileBottomNav(currentIndex: 1),
-            ),
+            
           ],
         ),
       ),
@@ -169,39 +167,35 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
         children: [
-          PushSurfaceButton(
+          IconButton(
             onPressed: onBack,
-            borderRadius: 10,
-            child: const Padding(
-              padding: EdgeInsets.all(8),
-              child: Icon(Icons.arrow_back, color: AppColors.onSurfaceVariant, size: 20),
-            ),
+            icon: Icon(Icons.arrow_back, color: Colors.grey.shade600, size: 24),
           ),
           Expanded(
             child: Text(
               'Session Calendar',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm,
+              style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          PushSurfaceButton(
-            onPressed: onMonthTap,
-            borderRadius: 10,
+          InkWell(
+            onTap: onMonthTap,
+            borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(monthLabel, style: AppTextStyles.labelBold),
+                  Text(monthLabel, style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitPrimary)),
                   const SizedBox(width: 2),
-                  const Icon(Icons.expand_more, size: 18, color: AppColors.onSurfaceVariant),
+                  Icon(Icons.expand_more, size: 18, color: context.colors.vesitPrimary),
                 ],
               ),
             ),
@@ -234,14 +228,13 @@ class _CalendarCard extends StatelessWidget {
       for (var day = 1; day <= _daysInMonth; day++)
         _DayCell(
           day: day,
-          dots: dots[day] ?? const [],
+          dots: dots[day] ?? [],
           selected: day == selectedDay,
           onTap: () => onDaySelected(day),
         ),
     ];
 
-    return RaisedPanel(
-      borderRadius: 20,
+    return VesitCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -282,7 +275,7 @@ class _WeekdayLabel extends StatelessWidget {
     return Text(
       label,
       textAlign: TextAlign.center,
-      style: AppTextStyles.labelBold.copyWith(color: AppColors.secondary),
+      style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade500),
     );
   }
 }
@@ -307,7 +300,7 @@ class _DayCell extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: selected ? AppColors.inverseSurface : Colors.transparent,
+          color: selected ? context.colors.vesitPrimary : Colors.transparent,
           boxShadow: selected
               ? [
                   BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
@@ -325,7 +318,7 @@ class _DayCell extends StatelessWidget {
                 fontFamily: 'FamiljenGrotesk',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: selected ? AppColors.inverseOnSurface : AppColors.onSurface,
+                color: selected ? Colors.white : context.colors.vesitTextHeading,
               ),
             ),
             if (dots.isNotEmpty) ...[
@@ -341,7 +334,7 @@ class _DayCell extends StatelessWidget {
                         height: 5,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: d == _MarkStatus.present ? AppColors.primaryContainer : AppColors.error,
+                          color: d == _MarkStatus.present ? Colors.green : Colors.red,
                         ),
                       ),
                     ),
@@ -364,8 +357,7 @@ class _SessionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final present = session.status == _MarkStatus.present;
 
-    return RaisedPanel(
-      borderRadius: 16,
+    return VesitCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,27 +366,30 @@ class _SessionCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(session.time, style: AppTextStyles.labelBold.copyWith(color: AppColors.secondary)),
+                Text(session.time, style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade500)),
                 const SizedBox(height: 4),
                 Text(
                   session.subject,
-                  style: AppTextStyles.bodyLg.copyWith(color: AppColors.onSurface, fontWeight: FontWeight.bold),
+                  style: context.textStyles.vesitBodyLg.copyWith(color: context.colors.vesitTextHeading, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 2),
-                Text(session.detail, style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+                Text(session.detail, style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600)),
                 if (session.note != null) ...[
                   const SizedBox(height: 6),
                   Text(
                     session.note!,
-                    style: AppTextStyles.labelMd.copyWith(color: present ? AppColors.primary : AppColors.error),
+                    style: context.textStyles.vesitLabelSm.copyWith(color: present ? Colors.green : Colors.red),
                   ),
                 ],
               ],
             ),
           ),
           const SizedBox(width: 12),
-          DebossedWell(
-            borderRadius: 999,
+          Container(
+            decoration: BoxDecoration(
+              color: present ? const Color(0xFFE8F5E9) : Colors.red.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -404,13 +399,13 @@ class _SessionCard extends StatelessWidget {
                   height: 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: present ? AppColors.primaryContainer : AppColors.error,
+                    color: present ? Colors.green : Colors.red,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   present ? 'PRESENT' : 'MISSED',
-                  style: AppTextStyles.labelBold.copyWith(fontSize: 11),
+                  style: context.textStyles.vesitLabelBold.copyWith(fontSize: 11, color: present ? Colors.green : Colors.red),
                 ),
               ],
             ),

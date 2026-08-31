@@ -1,0 +1,85 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run -d chrome
+
+## exception
+
+ShaderCompilerException: ShaderCompilerException: Shader compilation of "/Users/ronitahuja/develop/flutter/packages/flutter/lib/src/material/shaders/stretch_effect.frag" to "build/flutter_assets/shaders/stretch_effect.frag" failed with exit code 1.
+
+
+
+```
+#0      ShaderCompiler.compileShader (package:flutter_tools/src/build_system/tools/shader_compiler.dart:232:9)
+<asynchronous suspension>
+#1      writeBundle.<anonymous closure> (package:flutter_tools/src/bundle_builder.dart:227:25)
+<asynchronous suspension>
+#2      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+<asynchronous suspension>
+#3      writeBundle (package:flutter_tools/src/bundle_builder.dart:171:3)
+<asynchronous suspension>
+#4      WebDevFS.update (package:flutter_tools/src/isolated/devfs_web.dart:342:9)
+<asynchronous suspension>
+#5      ResidentWebRunner._updateDevFS (package:flutter_tools/src/isolated/resident_web_runner.dart:804:35)
+<asynchronous suspension>
+#6      ResidentWebRunner.run.<anonymous closure> (package:flutter_tools/src/isolated/resident_web_runner.dart:330:41)
+<asynchronous suspension>
+#7      asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.44.9, on macOS 27.0 26A5416b darwin-arm64, locale
+    en-IN) [206ms]
+    [32m•[39m Flutter version 3.44.9 on channel stable at /Users/ronitahuja/develop/flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision 6b182d2c75 (3 weeks ago), 2026-08-05 10:04:07 -0700
+    [32m•[39m Engine revision 5a2a6a42cc
+    [32m•[39m Dart version 3.12.2
+    [32m•[39m DevTools version 2.57.0
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop,
+      enable-windows-desktop, enable-android, enable-ios, cli-animations,
+      enable-native-assets, enable-swift-package-manager, omit-legacy-version-file,
+      enable-lldb-debugging, enable-uiscene-migration
+
+[32m[✓][39m Android toolchain - develop for Android devices (Android SDK version 36.0.0)
+    [3.7s]
+    [32m•[39m Android SDK at /Users/ronitahuja/Library/Android/sdk
+    [32m•[39m Emulator version 36.6.11.0 (build_id 15507667) (CL:N/A)
+    [32m•[39m Platform android-36.1, build-tools 36.0.0
+    [32m•[39m Java binary at:
+      /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java
+      This JDK is specified by the JAVA_HOME environment variable.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    [32m•[39m Java version Java(TM) SE Runtime Environment (build 21.0.8+12-LTS-250)
+    [32m•[39m All Android licenses accepted.
+
+[33m[!][39m Xcode - develop for iOS and macOS [1,674ms]
+    [31m✗[39m Xcode installation is incomplete; a full installation is necessary for iOS
+      and macOS development.
+      Download at: https://developer.apple.com/xcode/
+      Or install Xcode via the App Store.
+      Once installed, run:
+        sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+        sudo xcodebuild -runFirstLaunch
+    [32m•[39m CocoaPods version 1.17.0
+
+[32m[✓][39m Chrome - develop for the web [59ms]
+    [32m•[39m Chrome at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+[32m[✓][39m Connected device (3 available) [404ms]
+    [32m•[39m SM M317F (mobile) • RZ8N91VLE4L • android-arm64  • Android 12 (API 31)
+    [32m•[39m macOS (desktop)   • macos       • darwin-arm64   • macOS 27.0 26A5416b
+      darwin-arm64
+    [32m•[39m Chrome (web)      • chrome      • web-javascript • Google Chrome
+      151.0.7922.175
+
+[32m[✓][39m Network resources [1,023ms]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 1 category.
+```

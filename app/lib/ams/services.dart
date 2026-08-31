@@ -27,15 +27,15 @@ class MutableClock implements Clock {
   }
 }
 
-abstract class OtpGenerator {
+abstract class QrCodeGenerator {
   String generate();
 }
 
-class NumericOtpGenerator implements OtpGenerator {
+class NumericQrCodeGenerator implements QrCodeGenerator {
   final int length;
   final Random _rng = Random();
 
-  NumericOtpGenerator([this.length = 6]);
+  NumericQrCodeGenerator([this.length = 6]);
 
   @override
   String generate() {
@@ -56,12 +56,12 @@ String nextId(String prefix) {
 class SessionService {
   final SessionRepository repo;
   final Clock clock;
-  final OtpGenerator otpGen;
+  final QrCodeGenerator qrCodeGen;
 
   SessionService({
     required this.repo,
     required this.clock,
-    required this.otpGen,
+    required this.qrCodeGen,
   });
 
   AttendanceSession createSession({
@@ -91,8 +91,8 @@ class SessionService {
     final now = clock.now();
     final updated = session.copyWith(
       status: SessionStatus.active,
-      otp: Otp(
-        code: otpGen.generate(),
+      qrCode: QrCode(
+        code: qrCodeGen.generate(),
         issuedAt: now,
         expiresAt: now.add(Duration(seconds: ttlSeconds)),
       ),
@@ -101,7 +101,7 @@ class SessionService {
     return Result.success(updated);
   }
 
-  Result<AttendanceSession> rotateOtp(String sessionId, int ttlSeconds) {
+  Result<AttendanceSession> rotateQrCode(String sessionId, int ttlSeconds) {
     final session = repo.findById(sessionId);
     if (session == null) {
       return Result.failure(RejectionReason.sessionNotFound, reasonText[RejectionReason.sessionNotFound]!);
@@ -119,7 +119,7 @@ class SessionService {
     }
     final updated = session.copyWith(
       status: SessionStatus.closed,
-      clearOtp: true,
+      clearQrCode: true,
     );
     repo.save(updated);
     return Result.success(updated);
@@ -143,17 +143,17 @@ class AttendanceValidator {
     if (session == null) {
       return Result.failure(RejectionReason.sessionNotFound, reasonText[RejectionReason.sessionNotFound]!);
     }
-    if (session.status != SessionStatus.active || session.otp == null) {
+    if (session.status != SessionStatus.active || session.qrCode == null) {
       return Result.failure(RejectionReason.sessionNotActive, reasonText[RejectionReason.sessionNotActive]!);
     }
     if (!session.enrolledStudentIds.contains(studentId)) {
       return Result.failure(RejectionReason.studentNotEnrolled, reasonText[RejectionReason.studentNotEnrolled]!);
     }
-    if (session.otp!.code != code.trim()) {
-      return Result.failure(RejectionReason.invalidOtp, reasonText[RejectionReason.invalidOtp]!);
+    if (session.qrCode!.code != code.trim()) {
+      return Result.failure(RejectionReason.invalidQrCode, reasonText[RejectionReason.invalidQrCode]!);
     }
-    if (session.otp!.isExpired(clock.now())) {
-      return Result.failure(RejectionReason.otpExpired, reasonText[RejectionReason.otpExpired]!);
+    if (session.qrCode!.isExpired(clock.now())) {
+      return Result.failure(RejectionReason.qrCodeExpired, reasonText[RejectionReason.qrCodeExpired]!);
     }
     if (attendanceRepo.exists(session.id, studentId)) {
       return Result.failure(RejectionReason.duplicateAttendance, reasonText[RejectionReason.duplicateAttendance]!);
@@ -193,7 +193,7 @@ class AttendanceService {
       studentId: studentId,
       markedAt: clock.now(),
       status: AttendanceStatus.present,
-      method: AttendanceMethod.otp,
+      method: AttendanceMethod.qrCode,
     );
 
     attendanceRepo.save(record);

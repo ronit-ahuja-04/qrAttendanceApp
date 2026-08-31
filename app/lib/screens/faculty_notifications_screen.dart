@@ -1,123 +1,149 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
-import '../widgets/tactile_widgets.dart';
-import 'compose_announcement_screen.dart';
+import '../ams/globals.dart';
+import '../ams/api_services.dart';
+import '../ams/notification_service.dart';
 
-class _FacNotif {
-  _FacNotif({
-    required this.tag,
-    required this.tagColor,
-    required this.onTagColor,
-    required this.body,
-    required this.byIcon,
-    required this.by,
-    required this.timeIcon,
-    required this.time,
-    this.unread = false,
-  });
-
-  final String tag;
-  final Color tagColor;
-  final Color onTagColor;
-  final String body;
-  final IconData byIcon;
-  final String by;
-  final IconData timeIcon;
-  final String time;
-  bool unread;
-}
-
-/// Faculty Notifications — ported from the Stitch export (code.html:
-/// "Faculty Notifications - VESIT"). Reachable from the Faculty Dashboard's
-/// notification bell.
-class FacultyNotificationsScreen extends StatefulWidget {
-  const FacultyNotificationsScreen({super.key});
+/// Faculty Notification Settings
+/// A dedicated screen strictly for toggling notification preferences.
+/// The actual notification inbox is accessed from the Dashboard.
+class FacultyNotificationSettingsScreen extends StatefulWidget {
+  const FacultyNotificationSettingsScreen({super.key});
 
   @override
-  State<FacultyNotificationsScreen> createState() => _FacultyNotificationsScreenState();
+  State<FacultyNotificationSettingsScreen> createState() => _FacultyNotificationSettingsScreenState();
 }
 
-class _FacultyNotificationsScreenState extends State<FacultyNotificationsScreen> {
-  late final List<_FacNotif> _items = [
-    _FacNotif(
-      tag: 'Admin Notice / Room Reallocation',
-      tagColor: AppColors.primaryContainer,
-      onTagColor: AppColors.onPrimaryContainer,
-      body: 'Room 402 maintenance scheduled. Your 11:00 AM Database Systems lecture moved to Lab 301.',
-      byIcon: Icons.account_circle,
-      by: 'HOD / Academic Office',
-      timeIcon: Icons.schedule,
-      time: '15 mins ago',
-      unread: true,
-    ),
-    _FacNotif(
-      tag: 'Attendance Alert / Critical',
-      tagColor: AppColors.errorContainer,
-      onTagColor: AppColors.onErrorContainer,
-      body: '5 students in Computer Networks (CS-302) have fallen below the 75% mandatory attendance threshold.',
-      byIcon: Icons.bolt,
-      by: 'Automated System Alert',
-      timeIcon: Icons.schedule,
-      time: '2 hours ago',
-      unread: true,
-    ),
-    _FacNotif(
-      tag: 'Lab Preparation',
-      tagColor: AppColors.inverseSurface,
-      onTagColor: AppColors.inverseOnSurface,
-      body: "OS & Systems Lab hardware setups for tomorrow's session have been configured and verified.",
-      byIcon: Icons.engineering,
-      by: 'Alex Rivera (Lab Asst)',
-      timeIcon: Icons.calendar_today,
-      time: 'Yesterday',
-    ),
-    _FacNotif(
-      tag: 'Faculty Meeting',
-      tagColor: AppColors.secondaryContainer,
-      onTagColor: AppColors.onSecondaryContainer,
-      body: 'Monthly Department Curriculum Review meeting scheduled in Conference Room B.',
-      byIcon: Icons.groups,
-      by: 'Dean of Engineering',
-      timeIcon: Icons.event,
-      time: 'Oct 22, 02:00 PM',
-    ),
-  ];
+class _FacultyNotificationSettingsScreenState extends State<FacultyNotificationSettingsScreen> {
+  // Notification Preferences
+  bool _alertsEnabled = true;
+  bool _proxyEnabled = true;
+  bool _attendanceEnabled = true;
 
-  void _markAllRead() {
+  bool _pushEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      for (final n in _items) {
-        n.unread = false;
-      }
+      _pushEnabled = prefs.getBool('notif_master') ?? true;
+      _alertsEnabled = prefs.getBool('notif_alerts') ?? true;
+      _proxyEnabled = prefs.getBool('notif_proxy') ?? true;
+      _attendanceEnabled = prefs.getBool('notif_attendance') ?? true;
     });
+  }
+
+  Future<void> _savePreference(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+    _syncPrefsToBackend();
+  }
+
+  void _syncPrefsToBackend() {
+    if (AmsGlobals.loggedInUser != null) {
+      ApiSessionService().updateNotificationPrefs(
+        AmsGlobals.loggedInUser!.id,
+        {
+          'notif_master': _pushEnabled,
+          'notif_alerts': _alertsEnabled,
+          'notif_proxy': _proxyEnabled,
+          'notif_attendance': _attendanceEnabled,
+        },
+      );
+    }
+  }
+
+  Future<void> _toggleMasterPush(bool enabled) async {
+    setState(() => _pushEnabled = enabled);
+    await _savePreference('notif_master', enabled);
+    
+    // Update Backend
+    if (AmsGlobals.loggedInUser != null) {
+      if (enabled) {
+        // Re-register token
+        if (NotificationService().currentToken != null) {
+          await ApiSessionService().updateFcmToken(AmsGlobals.loggedInUser!.id, NotificationService().currentToken!);
+        }
+      } else {
+        // Deregister token
+        await ApiSessionService().updateFcmToken(AmsGlobals.loggedInUser!.id, '');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
         child: Column(
           children: [
-            _Header(onBack: () => Navigator.of(context).maybePop(), onMarkAllRead: _markAllRead),
+            _Header(onBack: () => Navigator.of(context).maybePop()),
+            
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                padding: const EdgeInsets.all(16),
                 children: [
-                  _SendAnnouncementCta(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ComposeAnnouncementScreen()),
-                    ),
+                  Text(
+                    'MASTER ALLOWANCE',
+                    style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade600, letterSpacing: 1.2),
+                  ),
+                  const SizedBox(height: 8),
+                  _ToggleCard(
+                    title: 'Allow Push Notifications',
+                    subtitle: 'Turn this off to stop receiving all push notifications from the server.',
+                    icon: Icons.notifications_active,
+                    value: _pushEnabled,
+                    onChanged: _toggleMasterPush,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'CHOOSE WHAT YOU GET NOTIFIED ABOUT (IN-APP)',
+                    style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade600, letterSpacing: 1.2),
                   ),
                   const SizedBox(height: 16),
-                  ...List.generate(_items.length * 2 - 1, (i) {
-                    if (i.isOdd) return const SizedBox(height: 12);
-                    final n = _items[i ~/ 2];
-                    return GestureDetector(
-                      onTap: () => setState(() => n.unread = false),
-                      child: _NotifCard(n: n),
-                    );
-                  }),
+                  
+                  _ToggleCard(
+                    title: 'Lecture/Lab Alerts',
+                    subtitle: 'Get reminded 15 mins before your scheduled classes.',
+                    icon: Icons.alarm,
+                    value: _alertsEnabled,
+                    onChanged: (v) {
+                      setState(() => _alertsEnabled = v);
+                      _savePreference('notif_alerts', v);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  _ToggleCard(
+                    title: 'Proxy Approvals',
+                    subtitle: 'Get notified when your proxy requests are accepted or rejected.',
+                    icon: Icons.check_circle_outline,
+                    value: _proxyEnabled,
+                    onChanged: (v) {
+                      setState(() => _proxyEnabled = v);
+                      _savePreference('notif_proxy', v);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  _ToggleCard(
+                    title: 'Attendance Reports',
+                    subtitle: 'Receive daily summaries of your marked attendance sessions.',
+                    icon: Icons.analytics_outlined,
+                    value: _attendanceEnabled,
+                    onChanged: (v) {
+                      setState(() => _attendanceEnabled = v);
+                      _savePreference('notif_attendance', v);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -128,113 +154,59 @@ class _FacultyNotificationsScreenState extends State<FacultyNotificationsScreen>
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onBack, required this.onMarkAllRead});
+class _ToggleCard extends StatelessWidget {
+  const _ToggleCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
 
-  final VoidCallback onBack;
-  final VoidCallback onMarkAllRead;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          ),
-          Expanded(
-            child: Text(
-              'Notifications',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary),
-            ),
-          ),
-          TextButton(
-            onPressed: onMarkAllRead,
-            child: Text('Mark all as read', style: AppTextStyles.labelBold.copyWith(color: AppColors.primary, fontSize: 12)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SendAnnouncementCta extends StatelessWidget {
-  const _SendAnnouncementCta({required this.onTap});
-
-  final VoidCallback onTap;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.outlineVariant),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+        color: context.colors.vesitWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
           Container(
             width: 48,
             height: 48,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
+              color: context.colors.vesitPrimary.withOpacity(0.1),
               shape: BoxShape.circle,
-              color: AppColors.primaryContainer,
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.campaign, color: AppColors.onPrimaryContainer),
+            child: Icon(icon, color: context.colors.vesitPrimary),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Need to notify students?',
-                  style: AppTextStyles.headlineSm.copyWith(fontSize: 16),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Broadcast class changes, assignments, or CA dates',
-                  style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant, fontSize: 12.5),
-                ),
+                Text(title, style: context.textStyles.vesitBodyMd.copyWith(fontWeight: FontWeight.bold, color: context.colors.vesitTextHeading)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, height: 1.3)),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  const BoxShadow(color: AppColors.onPrimaryContainer, offset: Offset(0, 2)),
-                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add, color: AppColors.onPrimaryContainer, size: 18),
-                  const SizedBox(width: 2),
-                  Text(
-                    'Send',
-                    style: AppTextStyles.labelBold.copyWith(color: AppColors.onPrimaryContainer, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(width: 12),
+          Switch(
+            value: value,
+            activeColor: context.colors.vesitPrimary,
+            onChanged: onChanged,
           ),
         ],
       ),
@@ -242,84 +214,36 @@ class _SendAnnouncementCta extends StatelessWidget {
   }
 }
 
-class _NotifCard extends StatelessWidget {
-  const _NotifCard({required this.n});
+class _Header extends StatelessWidget {
+  const _Header({required this.onBack});
 
-  final _FacNotif n;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: n.unread ? 1 : 0.9,
-      child: RaisedPanel(
-        borderRadius: 12,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: n.tagColor,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: n.onTagColor.withOpacity(0.2)),
-                    ),
-                    child: Text(
-                      n.tag.toUpperCase(),
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: n.onTagColor),
-                    ),
-                  ),
-                ),
-                if (n.unread) const SizedBox(width: 8),
-                if (n.unread) const PilotLight(active: true, size: 10),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(n.body, style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface, height: 1.35)),
-            const SizedBox(height: 10),
-            DebossedWell(
-              borderRadius: 8,
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _MetaLine(icon: n.byIcon, text: n.by),
-                  _MetaLine(icon: n.timeIcon, text: n.time),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
       ),
-    );
-  }
-}
-
-class _MetaLine extends StatelessWidget {
-  const _MetaLine({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            text,
-            style: AppTextStyles.labelSm.copyWith(color: AppColors.onSurfaceVariant),
-            overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: Icon(Icons.arrow_back, color: Colors.grey.shade600),
           ),
-        ),
-      ],
+          Expanded(
+            child: Text(
+              'Notification Settings',
+              textAlign: TextAlign.center,
+              style: context.textStyles.vesitHeadlineMd.copyWith(color: context.colors.vesitPrimary),
+            ),
+          ),
+          const SizedBox(width: 48), // Balance for back button
+        ],
+      ),
     );
   }
 }

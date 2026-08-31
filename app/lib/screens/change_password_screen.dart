@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
+import '../ams/globals.dart';
+import '../widgets/vesit_toast.dart';
 
 /// Change Password — ported from the Stitch export (code.html:
 /// "Chronos Admin - Change Password"). Reachable from Account Settings'
@@ -30,40 +32,37 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+    Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_newController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("New password and confirmation don't match")),
-      );
+      VesitToast.show(context: context, title: "New password and confirmation don't match", type: ToastType.info);
       return;
     }
 
-    setState(() {
-      _submitting = true;
-      _success = false;
-    });
-
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    setState(() {
-      _submitting = false;
-      _success = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _success = false);
-    _formKey.currentState?.reset();
-    _currentController.clear();
-    _newController.clear();
-    _confirmController.clear();
+    setState(() => _submitting = true);
+    
+    try {
+      await Future.delayed(const Duration(milliseconds: 500)); // mock network call
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _success = true;
+      });
+      VesitToast.show(context: context, title: 'Password updated successfully', type: ToastType.success);
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      VesitToast.show(context: context, title: "Error: $e", type: ToastType.error);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -81,14 +80,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           height: 80,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.surfaceContainer,
-                            border: Border.all(color: AppColors.outlineVariant),
-                            boxShadow: const [
+                            color: context.colors.surfaceContainer,
+                            border: Border.all(color: context.colors.outlineVariant),
+                            boxShadow: [
                               BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
                             ],
                           ),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.lock_reset, color: AppColors.primary, size: 36),
+                          child: Icon(Icons.lock_reset, color: context.colors.primary, size: 36),
                         ),
                         Positioned(
                           top: -2,
@@ -98,10 +97,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             height: 16,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.primaryContainer,
-                              border: Border.all(color: AppColors.surface, width: 2),
+                              color: context.colors.primaryContainer,
+                              border: Border.all(color: context.colors.surface, width: 2),
                               boxShadow: [
-                                BoxShadow(color: AppColors.primaryContainer.withOpacity(0.8), blurRadius: 6),
+                                BoxShadow(color: context.colors.primaryContainer.withOpacity(0.8), blurRadius: 6),
                               ],
                             ),
                           ),
@@ -163,19 +162,19 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
+                      color: context.colors.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.outlineVariant, width: 1),
+                      border: Border.all(color: context.colors.outlineVariant, width: 1),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.info_outline, color: AppColors.primary, size: 18),
+                        Icon(Icons.info_outline, color: context.colors.primary, size: 18),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'Ensure your new password contains a mix of uppercase, lowercase, numbers, and symbols for maximum security.',
-                            style: AppTextStyles.labelSm.copyWith(color: AppColors.onSurfaceVariant),
+                            style: context.textStyles.labelSm.copyWith(color: context.colors.onSurfaceVariant),
                           ),
                         ),
                       ],
@@ -200,21 +199,21 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: context.colors.surface,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
         children: [
           IconButton(
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: context.colors.primary),
           ),
           Expanded(
             child: Text(
               'Change Password',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary),
+              style: context.textStyles.headlineSm.copyWith(color: context.colors.primary),
             ),
           ),
           const SizedBox(width: 48),

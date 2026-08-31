@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
+import '../widgets/vesit_widgets.dart';
+import '../ams/globals.dart';
 import 'report_timeline_screen.dart';
 
 /// "Report Details" — Step 1 of 3 in the Generate Report flow. Mirrors the
@@ -9,31 +11,45 @@ import 'report_timeline_screen.dart';
 /// Subject dropdowns inside a raised card, a 3-dot progress indicator, and
 /// a "CONTINUE TO TIMELINE" action that proceeds to the session timeline.
 class ReportFiltersScreen extends StatefulWidget {
-  const ReportFiltersScreen({super.key});
+  const ReportFiltersScreen({super.key, this.scrollController});
+  final ScrollController? scrollController;
 
   @override
   State<ReportFiltersScreen> createState() => _ReportFiltersScreenState();
 }
 
 class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
-  static const _divisions = [
-    'TE - Division A',
-    'TE - Division B',
-    'BE - Division A',
-  ];
-  static const _subjects = [
-    'Java Programming',
-    'Database Management',
-    'Operating Systems',
-  ];
+  late List<String> _subjects;
+  late String _subject;
+  late List<String> _batchTargets;
+  late String _batchTarget;
 
-  String _division = _divisions.first;
-  String _subject = _subjects.first;
+  @override
+  void initState() {
+    super.initState();
+    _subjects = AmsGlobals.timetableSlots.map((s) => s['subject'] as String).toSet().toList();
+    if (_subjects.isEmpty) _subjects = ['No Subjects'];
+    _subject = _subjects.first;
+    _updateBatchTargets();
+  }
+
+  void _updateBatchTargets() {
+    _batchTargets = AmsGlobals.timetableSlots
+        .where((s) => s['subject'] == _subject)
+        .map((s) => (s['batchTarget'] as String?) ?? 'All')
+        .toSet()
+        .toList();
+    if (_batchTargets.isEmpty) _batchTargets = ['All'];
+    _batchTarget = _batchTargets.first;
+  }
 
   void _continueToTimeline() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const ReportTimelineScreen(),
+        builder: (_) => ReportTimelineScreen(
+          subject: _subject,
+          batchTarget: _batchTarget,
+        ),
       ),
     );
   }
@@ -41,50 +57,47 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
         child: Column(
           children: [
             _ReportFiltersHeader(onBack: () => Navigator.of(context).maybePop()),
             Expanded(
               child: SingleChildScrollView(
+                controller: widget.scrollController,
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const _ProgressDots(step: 0, total: 3),
                     const SizedBox(height: 8),
-                    Container(
+                    VesitCard(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.outlineVariant, width: 1),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-                          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 4)),
-                        ],
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          ConfigCard(
-                            label: 'Division',
-                            child: DebossedDropdown<String>(
-                              value: _division,
-                              items: _divisions,
-                              itemLabel: (v) => v,
-                              onChanged: (v) => setState(() => _division = v!),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
                           ConfigCard(
                             label: 'Subject Name',
                             child: DebossedDropdown<String>(
                               value: _subject,
                               items: _subjects,
                               itemLabel: (v) => v,
-                              onChanged: (v) => setState(() => _subject = v!),
+                              onChanged: (v) {
+                                setState(() {
+                                  _subject = v!;
+                                  _updateBatchTargets();
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ConfigCard(
+                            label: 'Batch / Target',
+                            child: DebossedDropdown<String>(
+                              value: _batchTarget,
+                              items: _batchTargets,
+                              itemLabel: (v) => v,
+                              onChanged: (v) => setState(() => _batchTarget = v!),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -100,7 +113,7 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
                     Text(
                       'Step 1 of 3: Select the target class to generate an attendance report.',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.labelSm.copyWith(color: AppColors.onSurfaceVariant),
+                      style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
@@ -122,31 +135,27 @@ class _ReportFiltersHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant, width: 1)),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
         boxShadow: [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Row(
         children: [
-          PushSurfaceButton(
+          IconButton(
             onPressed: onBack,
-            borderRadius: 999,
-            child: const Padding(
-              padding: EdgeInsets.all(8),
-              child: Icon(Icons.arrow_back, color: AppColors.primary),
-            ),
+            icon: Icon(Icons.arrow_back, color: context.colors.vesitPrimary),
           ),
           Expanded(
             child: Text(
               'Report Details',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary),
+              style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary),
             ),
           ),
-          const SizedBox(width: 40), // balances the back button
+          const SizedBox(width: 48), // balances the back button
         ],
       ),
     );
@@ -170,7 +179,7 @@ class _ProgressDots extends StatelessWidget {
           width: 48,
           height: 8,
           decoration: BoxDecoration(
-            color: active ? AppColors.primary : AppColors.surfaceContainerHigh,
+            color: active ? context.colors.vesitPrimary : Colors.grey.shade300,
             borderRadius: BorderRadius.circular(999),
             boxShadow: [
               BoxShadow(color: Colors.black.withOpacity(active ? 0.3 : 0.1), blurRadius: 2, offset: const Offset(0, 1)),

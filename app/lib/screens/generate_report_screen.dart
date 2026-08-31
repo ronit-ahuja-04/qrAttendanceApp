@@ -3,11 +3,15 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../ams/globals.dart';
 import '../ams/models.dart';
-import 'dart:io';
 import 'dart:convert';
-import 'package:excel/excel.dart' as excel;
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:http/http.dart' as http;
+import '../ams/api_services.dart';
 
 class GenerateReportScreen extends StatefulWidget {
   const GenerateReportScreen({super.key});
@@ -48,7 +52,7 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -59,9 +63,9 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
             if (_isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (_sessions.isEmpty)
-              const Expanded(
+              Expanded(
                 child: Center(
-                  child: Text('No past sessions found.', style: AppTextStyles.bodyLg),
+                  child: Text('No past sessions found.', style: context.textStyles.bodyLg),
                 ),
               )
             else
@@ -99,9 +103,9 @@ class _SessionCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: context.colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: context.colors.outlineVariant),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
         ],
@@ -110,17 +114,17 @@ class _SessionCard extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: Text(
           session.courseCode,
-          style: AppTextStyles.headlineSm.copyWith(fontSize: 16),
+          style: context.textStyles.headlineSm.copyWith(fontSize: 16),
         ),
         subtitle: Text(
           'Date: $dateStr at $timeStr\nStatus: ${session.status.name.toUpperCase()}',
-          style: AppTextStyles.labelMd,
+          style: context.textStyles.labelMd,
         ),
         trailing: ElevatedButton(
           onPressed: onTap,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primaryContainer,
-            foregroundColor: AppColors.onPrimaryContainer,
+            backgroundColor: context.colors.primaryContainer,
+            foregroundColor: context.colors.onPrimaryContainer,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           child: const Text('View Report', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -141,8 +145,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: context.colors.surface,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
@@ -152,7 +156,7 @@ class _Header extends StatelessWidget {
             child: Text(
               title,
               textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm,
+              style: context.textStyles.headlineSm,
             ),
           ),
           trailing ?? const SizedBox(width: 48), // Balance for centering
@@ -190,43 +194,42 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
-  Future<void> _exportToExcel() async {
+  Future<void> _exportToLockedExcel() async {
     try {
-      final excelFile = excel.Excel.createExcel();
-      final sheet = excelFile['Sheet1'];
+      final url = '$baseUrl/api/report/excel/${widget.session.id}';
       
-      // Header row
-      sheet.appendRow([
-        excel.TextCellValue('Name'),
-        excel.TextCellValue('Roll No'),
-        excel.TextCellValue('Status'),
-        excel.TextCellValue('Method')
-      ]);
-      
-      // Data rows
-      for (final student in _students) {
-        sheet.appendRow([
-          excel.TextCellValue(student['name'] ?? 'Unknown'),
-          excel.TextCellValue(student['rollNo'] ?? 'N/A'),
-          excel.TextCellValue(student['status'] ?? 'absent'),
-          excel.TextCellValue(student['method'] ?? ''),
-        ]);
-      }
-      
-      // Save file
-      final bytes = excelFile.encode();
-      if (bytes != null) {
-        final dir = await getApplicationDocumentsDirectory();
-        final path = '${dir.path}/Report_${widget.session.courseCode}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
-        final file = File(path);
-        await file.writeAsBytes(bytes);
-        
+      if (kIsWeb) {
+        // Web download logic
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute("download", 'Report_${widget.session.courseCode}.xlsx')
+          ..target = '_blank'
+          ..click();
+          
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Report saved to $path')),
+            const SnackBar(content: Text('Report downloaded successfully')),
           );
         }
-        OpenFile.open(path);
+      } else {
+        // Mobile/Desktop logic
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final bytes = response.bodyBytes;
+          final filename = 'Report_${widget.session.courseCode}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+          final dir = await getApplicationDocumentsDirectory();
+          final path = '${dir.path}/$filename';
+          final file = File(path);
+          await file.writeAsBytes(bytes);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Report downloaded and saved successfully!')),
+            );
+          }
+          OpenFile.open(path);
+        } else {
+          throw Exception('Failed to download from server');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -243,7 +246,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final total = _students.length;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -251,9 +254,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               title: '${widget.session.courseCode} Report',
               onBack: () => Navigator.of(context).pop(),
               trailing: IconButton(
-                icon: const Icon(Icons.download, color: AppColors.primary),
-                onPressed: _exportToExcel,
-                tooltip: 'Export to Excel',
+                icon: Icon(Icons.download, color: context.colors.primary),
+                onPressed: _exportToLockedExcel,
+                tooltip: 'Export Lockable Excel',
               ),
             ),
             if (_isLoading)
@@ -266,7 +269,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryContainer,
+                        color: context.colors.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -292,9 +295,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                                 color: isPresent ? Colors.green : Colors.red,
                               ),
                             ),
-                            title: Text(student['name'] ?? 'Unknown', style: AppTextStyles.labelBold),
+                            title: Text(AmsGlobals.formatStudentName(student['name'], student['email']), style: context.textStyles.labelBold),
                             subtitle: Text(student['rollNo'] ?? 'N/A'),
-                            trailing: Text(student['method'] ?? '', style: AppTextStyles.labelSm),
+                            trailing: Text(isPresent ? (student['method'] ?? '') : '', style: context.textStyles.labelSm),
                           );
                         },
                       ),
@@ -319,9 +322,9 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: TextStyle(color: AppColors.onPrimaryContainer, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: context.colors.onPrimaryContainer, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(color: AppColors.onPrimaryContainer, fontSize: 24, fontWeight: FontWeight.w900)),
+        Text(value, style: TextStyle(color: context.colors.onPrimaryContainer, fontSize: 24, fontWeight: FontWeight.w900)),
       ],
     );
   }

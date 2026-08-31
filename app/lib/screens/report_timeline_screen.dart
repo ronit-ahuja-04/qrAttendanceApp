@@ -2,205 +2,212 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
-import 'generate_report_screen.dart';
+import '../widgets/vesit_widgets.dart';
+import '../widgets/vesit_toast.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:http/http.dart' as http;
+import '../ams/globals.dart';
+import '../ams/api_services.dart';
 
-enum ReportTimeline { weekly, monthly, semester }
-
-extension on ReportTimeline {
-  String get title {
-    switch (this) {
-      case ReportTimeline.weekly:
-        return 'Weekly Report';
-      case ReportTimeline.monthly:
-        return 'Monthly Report';
-      case ReportTimeline.semester:
-        return 'Current Semester';
-    }
-  }
-
-  String get subtitle {
-    switch (this) {
-      case ReportTimeline.weekly:
-        return 'Last 7 days of attendance';
-      case ReportTimeline.monthly:
-        return 'Current calendar month';
-      case ReportTimeline.semester:
-        return 'Full semester aggregate';
-    }
-  }
-}
-
-/// "Select Timeline" — Step 2 of 3 in the Generate Report flow. Mirrors the
-/// "Generate Report - Step 2" Stitch mockup (code.html): a raised card of
-/// radio-style timeline options (Weekly / Monthly / Semester) and a sticky
-/// bottom "GENERATE REPORT" action.
 class ReportTimelineScreen extends StatefulWidget {
-  const ReportTimelineScreen({super.key});
+  final String subject;
+  final String batchTarget;
+
+  const ReportTimelineScreen({
+    super.key,
+    required this.subject,
+    required this.batchTarget,
+  });
 
   @override
   State<ReportTimelineScreen> createState() => _ReportTimelineScreenState();
 }
 
 class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
-  ReportTimeline _selected = ReportTimeline.monthly;
+  DateTimeRange? _dateRange;
+  bool _isDownloading = false;
 
-  void _generateReport() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const GenerateReportScreen(),
-      ),
+  Future<void> _pickDateRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _dateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: context.colors.vesitPrimary,
+              onPrimary: context.colors.vesitWhite,
+              onSurface: context.colors.vesitTextHeading,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
+    if (range != null) {
+      setState(() => _dateRange = range);
+    }
+  }
+
+  Future<void> _generateReport() async {
+    if (_dateRange == null) {
+      VesitToast.show(
+        context: context,
+        title: 'Error',
+        description: 'Please select a date range first',
+        type: ToastType.error,
+      );
+      return;
+    }
+
+    setState(() => _isDownloading = true);
+
+    try {
+      final facultyId = AmsGlobals.loggedInUser!.id;
+      final start = _dateRange!.start.toIso8601String();
+      // Add almost 1 full day to the end date so it covers 23:59:59 of that day
+      final end = _dateRange!.end.add(const Duration(hours: 23, minutes: 59, seconds: 59)).toIso8601String();
+      final subject = Uri.encodeComponent(widget.subject);
+      final batchTarget = Uri.encodeComponent(widget.batchTarget);
+      
+      final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end';
+      
+      if (kIsWeb) {
+        // Web download logic
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute("download", 'BulkReport_${widget.subject}.xlsx')
+          ..target = '_blank'
+          ..click();
+          
+        if (mounted) {
+          VesitToast.show(
+            context: context,
+            title: 'Success',
+            description: 'Report downloaded successfully',
+            type: ToastType.success,
+          );
+        }
+      } else {
+        // Mobile/Desktop logic
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final bytes = response.bodyBytes;
+          final filename = 'BulkReport_${widget.subject}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+          final dir = await getApplicationDocumentsDirectory();
+          final path = '${dir.path}/$filename';
+          final file = File(path);
+          await file.writeAsBytes(bytes);
+          
+          if (mounted) {
+            VesitToast.show(
+              context: context,
+              title: 'Success',
+              description: 'Report saved to Downloads',
+              type: ToastType.success,
+            );
+          }
+          OpenFile.open(path);
+        } else {
+          final msg = response.body;
+          throw Exception(msg.isNotEmpty ? msg : 'Failed to download from server');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        VesitToast.show(
+          context: context,
+          title: 'Export Failed',
+          description: e.toString(),
+          type: ToastType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dateFormat = DateFormat('MMM d, yyyy');
+
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                _ReportTimelineHeader(onBack: () => Navigator.of(context).maybePop()),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-                          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 4)),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          for (final option in ReportTimeline.values) ...[
-                            _TimelineOption(
-                              timeline: option,
-                              selected: _selected == option,
-                              onTap: () => setState(() => _selected = option),
-                            ),
-                            if (option != ReportTimeline.values.last) const SizedBox(height: 12),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.surface.withOpacity(0),
-                      AppColors.surface,
-                      AppColors.surface,
-                    ],
-                  ),
-                ),
+            _ReportTimelineHeader(onBack: () => Navigator.of(context).maybePop()),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    PushableButton(
-                      label: 'Generate Report',
-                      icon: Icons.description,
-                      onPressed: _generateReport,
+                    VesitCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ConfigCard(
+                            label: 'Selected Date Range',
+                            child: InkWell(
+                              onTap: _pickDateRange,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: context.colors.vesitWhite,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: context.colors.vesitPrimary.withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.date_range, color: context.colors.vesitPrimary),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        _dateRange == null
+                                            ? 'Tap to select dates'
+                                            : '${dateFormat.format(_dateRange!.start)} - ${dateFormat.format(_dateRange!.end)}',
+                                        style: context.textStyles.vesitBodyMd.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: _dateRange == null ? Colors.grey.shade500 : context.colors.vesitTextHeading,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _isDownloading 
+                            ? const Center(child: CircularProgressIndicator())
+                            : PushableButton(
+                                label: 'Generate Bulk Report',
+                                icon: Icons.download,
+                                onPressed: _dateRange != null ? () => _generateReport() : null,
+                              ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     Text(
-                      'Report will be exported as a downloadable spreadsheet.',
+                      'Step 2 of 3: Select the date range to aggregate attendance for.',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.labelSm,
+                      style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TimelineOption extends StatelessWidget {
-  const _TimelineOption({
-    required this.timeline,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final ReportTimeline timeline;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.surface : AppColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? AppColors.primaryContainer : Colors.transparent,
-            width: 2,
-          ),
-          boxShadow: selected
-              ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))]
-              : null,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(timeline.title, style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurface)),
-                  const SizedBox(height: 4),
-                  Text(timeline.subtitle, style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant, fontSize: 13)),
-                ],
-              ),
-            ),
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.debossedWell,
-                border: Border.all(
-                  color: selected ? AppColors.primaryContainer : AppColors.outline,
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 2)),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: selected
-                  ? Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.primaryContainer,
-                        boxShadow: [
-                          BoxShadow(color: AppColors.primaryContainer.withOpacity(0.5), blurRadius: 8),
-                        ],
-                      ),
-                    )
-                  : null,
             ),
           ],
         ),
@@ -218,31 +225,27 @@ class _ReportTimelineHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant, width: 1)),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
         boxShadow: [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Row(
         children: [
-          PushSurfaceButton(
+          IconButton(
             onPressed: onBack,
-            borderRadius: 999,
-            child: const Padding(
-              padding: EdgeInsets.all(8),
-              child: Icon(Icons.arrow_back, color: AppColors.primary),
-            ),
+            icon: Icon(Icons.arrow_back, color: context.colors.vesitPrimary),
           ),
           Expanded(
             child: Text(
               'Select Timeline',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary),
+              style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary),
             ),
           ),
-          const SizedBox(width: 40), // balances the back button
+          const SizedBox(width: 48), // balances the back button
         ],
       ),
     );

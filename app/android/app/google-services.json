@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "380742054455",
+    "project_id": "attendance-monitoring-sy-89218",
+    "storage_bucket": "attendance-monitoring-sy-89218.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:380742054455:android:2993b0688bf936940605b2",
+        "android_client_info": {
+          "package_name": "com.example.attendance_portal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAha5TvnJVkCBvj9illFXoKFM_Ub5hUmWI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

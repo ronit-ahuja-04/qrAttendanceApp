@@ -54,8 +54,7 @@ export class NumericOtpGenerator implements OtpGenerator {
   }
 }
 
-let idSeed = 0;
-export const nextId = (prefix: string) => `${prefix}_${++idSeed}`;
+export const nextId = (prefix: string) => `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
 /* ---------------------------------- enums --------------------------------- */
 
@@ -72,7 +71,6 @@ export enum AttendanceStatus {
 
 export enum AttendanceMethod {
   otp = "otp",
-  otpBluetooth = "otpBluetooth",
   manual = "manual",
 }
 

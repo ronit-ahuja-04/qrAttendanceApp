@@ -4,6 +4,7 @@ import '../theme/app_text_styles.dart';
 import '../screens/student_profile_screen.dart';
 import '../screens/student_dashboard_screen.dart';
 import '../screens/attendance_history_screen.dart';
+import '../screens/student_timetable_screen.dart';
 
 /// A "raised plastic" panel — the main card surface used for the
 /// login/registration forms.
@@ -24,21 +25,13 @@ class RaisedPanel extends StatelessWidget {
     return Container(
       padding: padding ?? const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.vesitWhite,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: const Border(
-          bottom: BorderSide(color: AppColors.debossedWell, width: 2),
-        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -93,11 +86,12 @@ class _DebossedFieldState extends State<DebossedField> {
         if (widget.showLabel)
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 6),
-            child: Text(widget.label.toUpperCase(), style: AppTextStyles.labelBold),
+            child: Text(widget.label.toUpperCase(),
+                style: context.textStyles.labelBold),
           ),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.debossedWell,
+            color: context.colors.debossedWell,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
@@ -110,7 +104,7 @@ class _DebossedFieldState extends State<DebossedField> {
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(
             children: [
-              Icon(widget.icon, color: AppColors.outline, size: 20),
+              Icon(widget.icon, color: context.colors.outline, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: TextFormField(
@@ -118,10 +112,11 @@ class _DebossedFieldState extends State<DebossedField> {
                   obscureText: _obscured,
                   keyboardType: widget.keyboardType,
                   validator: widget.validator,
-                  style: AppTextStyles.bodyMd,
+                  style: context.textStyles.bodyMd,
                   decoration: InputDecoration(
                     hintText: widget.hint,
-                    hintStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.outlineVariant),
+                    hintStyle: context.textStyles.bodyMd
+                        .copyWith(color: context.colors.outlineVariant),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -132,8 +127,10 @@ class _DebossedFieldState extends State<DebossedField> {
                 GestureDetector(
                   onTap: () => setState(() => _obscured = !_obscured),
                   child: Icon(
-                    _obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                    color: AppColors.outline,
+                    _obscured
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: context.colors.outline,
                     size: 20,
                   ),
                 ),
@@ -151,12 +148,12 @@ class PushableButton extends StatefulWidget {
   const PushableButton({
     super.key,
     required this.label,
-    required this.onPressed,
+    this.onPressed,
     this.icon,
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final IconData? icon;
 
   @override
@@ -168,24 +165,36 @@ class _PushableButtonState extends State<PushableButton> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDisabled = widget.onPressed == null;
+    
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapDown: isDisabled ? null : (_) => setState(() => _pressed = true),
+      onTapCancel: isDisabled ? null : () => setState(() => _pressed = false),
+      onTapUp: isDisabled ? null : (_) => setState(() => _pressed = false),
       onTap: widget.onPressed,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        width: double.infinity,
-        height: 52,
-        transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
-        decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFFE19216) : AppColors.primaryContainer,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: _pressed
-              ? [const BoxShadow(color: AppColors.primary, offset: Offset(0, 1))]
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          width: double.infinity,
+          height: 52,
+          transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
+          decoration: BoxDecoration(
+            color:
+                _pressed ? Color(0xFFE19216) : context.colors.primaryContainer,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: _pressed
+              ? [
+                  BoxShadow(
+                      color: context.colors.primary, offset: Offset(0, 1))
+                ]
               : [
-                  const BoxShadow(color: AppColors.primary, offset: Offset(0, 4)),
-                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 6)),
+                  BoxShadow(
+                      color: context.colors.primary, offset: Offset(0, 4)),
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 6)),
                 ],
         ),
         alignment: Alignment.center,
@@ -194,7 +203,8 @@ class _PushableButtonState extends State<PushableButton> {
           children: [
             Text(
               widget.label.toUpperCase(),
-              style: AppTextStyles.labelBold.copyWith(color: Colors.white, fontSize: 15, letterSpacing: 1.2),
+              style: context.textStyles.labelBold.copyWith(
+                  color: Colors.white, fontSize: 15, letterSpacing: 1.2),
             ),
             if (widget.icon != null) ...[
               const SizedBox(width: 8),
@@ -202,6 +212,7 @@ class _PushableButtonState extends State<PushableButton> {
             ],
           ],
         ),
+      ),
       ),
     );
   }
@@ -220,9 +231,12 @@ class LedDot extends StatelessWidget {
       height: 8,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: active ? AppColors.primaryContainer : AppColors.secondary,
+        color: active ? context.colors.primaryContainer : context.colors.secondary,
         boxShadow: active
-            ? [const BoxShadow(color: AppColors.amberGlow, blurRadius: 8, spreadRadius: 1)]
+            ? [
+                BoxShadow(
+                    color: context.colors.amberGlow, blurRadius: 8, spreadRadius: 1)
+              ]
             : null,
       ),
     );
@@ -243,7 +257,7 @@ class RoleToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.debossedWell,
+        color: context.colors.debossedWell,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -264,17 +278,22 @@ class RoleToggle extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: active ? AppColors.surface : Colors.transparent,
+            color: active ? context.colors.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
             boxShadow: active
-                ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
+                ? [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2))
+                  ]
                 : null,
           ),
           alignment: Alignment.center,
           child: Text(
             text,
-            style: AppTextStyles.labelBold.copyWith(
-              color: active ? AppColors.onSurface : AppColors.onSurfaceVariant,
+            style: context.textStyles.labelBold.copyWith(
+              color: active ? context.colors.onSurface : context.colors.onSurfaceVariant,
               fontSize: 12,
             ),
           ),
@@ -296,9 +315,11 @@ class TactileAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: SafeArea(
@@ -311,10 +332,11 @@ class TactileAppBar extends StatelessWidget implements PreferredSizeWidget {
               fit: BoxFit.contain,
             ),
             const SizedBox(width: 8),
-            const Text('VESIT', style: AppTextStyles.displayLg),
+            Text('VESIT', style: context.textStyles.displayLg),
             const Spacer(),
             if (trailingTitle != null)
-              Text(trailingTitle!, style: AppTextStyles.headlineSm.copyWith(fontSize: 16)),
+              Text(trailingTitle!,
+                  style: context.textStyles.headlineSm.copyWith(fontSize: 16)),
           ],
         ),
       ),
@@ -341,11 +363,13 @@ class DebossedWell extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: AppColors.debossedWell,
+        color: context.colors.debossedWell,
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6, offset: const Offset(0, 3)),
-          const BoxShadow(color: Colors.white, blurRadius: 0, offset: Offset(0, 1)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 3)),
         ],
       ),
       child: child,
@@ -367,10 +391,12 @@ class PilotLight extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: active ? AppColors.primaryContainer : const Color(0xFF474742),
+        color: active ? context.colors.primaryContainer : Color(0xFF474742),
         boxShadow: active
             ? [
-                BoxShadow(color: AppColors.primaryContainer.withOpacity(0.7), blurRadius: 8),
+                BoxShadow(
+                    color: context.colors.primaryContainer.withOpacity(0.7),
+                    blurRadius: 8),
               ]
             : null,
       ),
@@ -410,15 +436,20 @@ class _PushSurfaceButtonState extends State<PushSurfaceButton> {
         duration: const Duration(milliseconds: 100),
         transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
         decoration: BoxDecoration(
-          color: _pressed ? AppColors.debossedWell : AppColors.surface,
+          color: _pressed ? context.colors.debossedWell : context.colors.surface,
           borderRadius: BorderRadius.circular(widget.borderRadius),
           boxShadow: _pressed
               ? [
-                  BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 2)),
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2)),
                 ]
               : [
-                  const BoxShadow(color: Colors.white, offset: Offset(0, -1)),
-                  BoxShadow(color: Colors.black.withOpacity(0.15), offset: const Offset(0, 4)),
+                  
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      offset: const Offset(0, 4)),
                 ],
         ),
         child: widget.child,
@@ -441,11 +472,11 @@ class ConfigCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: context.colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.outlineVariant, width: 1),
-        boxShadow: const [
-          BoxShadow(color: Colors.white, offset: Offset(0, 1)),
+        border: Border.all(color: context.colors.outlineVariant, width: 1),
+        boxShadow: [
+          
           BoxShadow(color: Colors.black12, blurRadius: 3, offset: Offset(0, 1)),
         ],
       ),
@@ -454,7 +485,7 @@ class ConfigCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(left: 2, bottom: 8),
-            child: Text(label.toUpperCase(), style: AppTextStyles.labelBold),
+            child: Text(label.toUpperCase(), style: context.textStyles.labelBold),
           ),
           child,
         ],
@@ -486,17 +517,20 @@ class DebossedDropdown<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.debossedWell,
+        color: context.colors.debossedWell,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6, offset: const Offset(0, 3)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3)),
         ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon, color: AppColors.outline, size: 20),
+            Icon(icon, color: context.colors.outline, size: 20),
             const SizedBox(width: 10),
           ],
           Expanded(
@@ -504,12 +538,14 @@ class DebossedDropdown<T> extends StatelessWidget {
               child: DropdownButton<T>(
                 value: value,
                 isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.onSurfaceVariant),
-                style: AppTextStyles.bodyMd,
-                dropdownColor: AppColors.surfaceContainerHigh,
+                icon: Icon(Icons.keyboard_arrow_down,
+                    color: context.colors.onSurfaceVariant),
+                style: context.textStyles.bodyMd,
+                dropdownColor: context.colors.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
                 items: items
-                    .map((e) => DropdownMenuItem<T>(value: e, child: Text(itemLabel(e))))
+                    .map((e) => DropdownMenuItem<T>(
+                        value: e, child: Text(itemLabel(e))))
                     .toList(),
                 onChanged: onChanged,
               ),
@@ -530,80 +566,112 @@ class TactileBottomNav extends StatelessWidget {
 
   static const _items = [
     (icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
-    (icon: Icons.calendar_today_outlined, activeIcon: Icons.calendar_today, label: 'Attendance'),
-    (icon: Icons.schedule_outlined, activeIcon: Icons.schedule, label: 'Timetable'),
+    (
+      icon: Icons.calendar_today_outlined,
+      activeIcon: Icons.calendar_today,
+      label: 'Attendance'
+    ),
+    (
+      icon: Icons.schedule_outlined,
+      activeIcon: Icons.schedule,
+      label: 'Timetable'
+    ),
     (icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 76,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceContainer,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -4))],
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))
+        ],
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_items.length, (i) {
-            final item = _items[i];
-            final active = i == currentIndex;
-            return GestureDetector(
-              onTap: () {
-                if (active) return;
-                if (item.label == 'Profile') {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const StudentProfileScreen()),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(_items.length, (i) {
+              final item = _items[i];
+              final active = i == currentIndex;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (active) return;
+                  if (item.label == 'Profile') {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                          builder: (_) => const StudentProfileScreen()),
+                    );
+                    return;
+                  }
+                  if (item.label == 'Home') {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                          builder: (_) => const StudentDashboardScreen()),
+                    );
+                    return;
+                  }
+                  if (item.label == 'Attendance') {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                          builder: (_) => const AttendanceHistoryScreen()),
+                    );
+                    return;
+                  }
+                  if (item.label == 'Timetable') {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                          builder: (_) => const StudentTimetableScreen()),
+                    );
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('${item.label} — coming soon'),
+                        duration: const Duration(seconds: 1)),
                   );
-                  return;
-                }
-                if (item.label == 'Home') {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const StudentDashboardScreen()),
-                  );
-                  return;
-                }
-                if (item.label == 'Attendance') {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen()),
-                  );
-                  return;
-                }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${item.label} — coming soon'), duration: const Duration(seconds: 1)),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: active ? AppColors.surfaceContainerHighest : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      active ? item.activeIcon : item.icon,
-                      color: active ? AppColors.primaryContainer : AppColors.secondary,
-                      size: 24,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.label.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: active ? AppColors.primaryContainer : AppColors.secondary,
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? context.colors.vesitPrimary.withOpacity(0.08)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        active ? item.activeIcon : item.icon,
+                        color: active
+                            ? context.colors.vesitPrimary
+                            : Colors.grey.shade500,
+                        size: 26,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              active ? FontWeight.bold : FontWeight.w600,
+                          color: active
+                              ? context.colors.vesitPrimary
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ),
     );

@@ -1,24 +1,70 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../ams/globals.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
+import '../widgets/vesit_widgets.dart';
+import '../widgets/vesit_toast.dart';
 
-/// Update Profile Picture — mirrors the Stitch export (code.html):
-/// dashed drop-well with debossed camera icon + LED, Take Photo /
-/// Upload from Gallery rows, requirements note, Save / Cancel footer.
-class UpdateProfilePictureScreen extends StatelessWidget {
+/// Update Profile Picture
+class UpdateProfilePictureScreen extends StatefulWidget {
   const UpdateProfilePictureScreen({super.key});
 
-  void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label — coming soon'), duration: const Duration(seconds: 1)),
-    );
+  @override
+  State<UpdateProfilePictureScreen> createState() => _UpdateProfilePictureScreenState();
+}
+
+class _UpdateProfilePictureScreenState extends State<UpdateProfilePictureScreen> {
+  XFile? _selectedFile;
+  bool _isUploading = false;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? picked = await _picker.pickImage(source: source, maxWidth: 800, maxHeight: 800);
+      if (picked != null) {
+        setState(() => _selectedFile = picked);
+      }
+    } catch (e) {
+      VesitToast.show(context: context, title: 'Failed to pick image: $e', type: ToastType.info);
+    }
+  }
+
+  Future<void> _saveProfilePicture() async {
+    if (_selectedFile == null) return;
+    final user = AmsGlobals.loggedInUser;
+    if (user == null) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final updatedUser = await AmsGlobals.sessionService.uploadProfilePicture(user.id, _selectedFile!);
+      if (updatedUser != null) {
+        AmsGlobals.loggedInUser = updatedUser;
+        if (mounted) {
+          VesitToast.show(context: context, title: 'Profile picture updated successfully!', type: ToastType.info);
+          Navigator.of(context).maybePop(true);
+        }
+      } else {
+        throw 'Failed to update profile picture';
+      }
+    } catch (e) {
+      if (mounted) {
+        VesitToast.show(context: context, title: 'Error: $e', type: ToastType.info);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
         child: Column(
           children: [
@@ -27,18 +73,21 @@ class UpdateProfilePictureScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
                 children: [
-                  _DropWell(onTap: () => _comingSoon(context, 'File picker')),
+                  _DropWell(
+                    file: _selectedFile,
+                    onTap: () => _pickImage(ImageSource.gallery),
+                  ),
                   const SizedBox(height: 24),
                   _OptionRow(
                     icon: Icons.camera_alt_outlined,
                     label: 'Take Photo',
-                    onTap: () => _comingSoon(context, 'Take Photo'),
+                    onTap: () => _pickImage(ImageSource.camera),
                   ),
                   const SizedBox(height: 12),
                   _OptionRow(
                     icon: Icons.image_outlined,
                     label: 'Upload from Gallery',
-                    onTap: () => _comingSoon(context, 'Upload from Gallery'),
+                    onTap: () => _pickImage(ImageSource.gallery),
                   ),
                   const SizedBox(height: 24),
                   const _RequirementsCard(),
@@ -46,7 +95,9 @@ class UpdateProfilePictureScreen extends StatelessWidget {
               ),
             ),
             _Footer(
-              onSave: () => Navigator.of(context).maybePop(),
+              isUploading: _isUploading,
+              hasFile: _selectedFile != null,
+              onSave: _saveProfilePicture,
               onCancel: () => Navigator.of(context).maybePop(),
             ),
           ],
@@ -64,36 +115,35 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
         children: [
           IconButton(
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: context.colors.vesitPrimary),
           ),
           Expanded(
             child: Column(
               children: [
                 Text(
                   'Update Profile Picture',
-                  style: AppTextStyles.headlineSm.copyWith(color: AppColors.primary, fontSize: 18),
+                  style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary, fontSize: 18),
                 ),
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceContainer,
+                    color: context.colors.vesitPrimary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppColors.outlineVariant.withOpacity(0.3)),
+                    border: Border.all(color: context.colors.vesitPrimary.withOpacity(0.3)),
                   ),
                   child: Text(
                     'TACTILE INTERFACE V1.0',
-                    style: AppTextStyles.labelSm.copyWith(letterSpacing: 1.5, fontSize: 9),
+                    style: context.textStyles.vesitLabelSm.copyWith(letterSpacing: 1.5, fontSize: 9, color: context.colors.vesitPrimary),
                   ),
                 ),
               ],
@@ -107,8 +157,9 @@ class _Header extends StatelessWidget {
 }
 
 class _DropWell extends StatelessWidget {
-  const _DropWell({required this.onTap});
+  const _DropWell({required this.file, required this.onTap});
 
+  final XFile? file;
   final VoidCallback onTap;
 
   @override
@@ -126,17 +177,23 @@ class _DropWell extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 96,
-                      height: 96,
-                      decoration: const BoxDecoration(
-                        color: AppColors.debossedWell,
+                      width: 128,
+                      height: 128,
+                      decoration: BoxDecoration(
+                        color: context.colors.vesitWhite,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
                         ],
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(Icons.photo_camera, color: AppColors.primary, size: 48),
+                      child: file == null
+                          ? Icon(Icons.photo_camera, color: context.colors.vesitPrimary, size: 48)
+                          : ClipOval(
+                              child: kIsWeb
+                                  ? Image.network(file!.path, width: 128, height: 128, fit: BoxFit.cover)
+                                  : Image.file(File(file!.path), width: 128, height: 128, fit: BoxFit.cover),
+                            ),
                     ),
                     Positioned(
                       top: 6,
@@ -145,11 +202,11 @@ class _DropWell extends StatelessWidget {
                         width: 16,
                         height: 16,
                         decoration: BoxDecoration(
-                          color: AppColors.primaryContainer,
+                          color: file == null ? context.colors.vesitPrimary : Color(0xFF2E7D32),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
-                            BoxShadow(color: AppColors.primaryContainer.withOpacity(0.8), blurRadius: 12),
+                            BoxShadow(color: (file == null ? context.colors.vesitPrimary : Color(0xFF2E7D32)).withOpacity(0.8), blurRadius: 12),
                           ],
                         ),
                       ),
@@ -160,9 +217,9 @@ class _DropWell extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    'Drag and drop or tap options below to upload a new profile photo',
+                    file == null ? 'Drag and drop or tap options below to upload a new profile photo' : 'Previewing your new profile picture',
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant, height: 1.5),
+                    style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600, height: 1.5),
                   ),
                 ),
               ],
@@ -183,7 +240,7 @@ class DottedBorder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _DashedRectPainter(color: AppColors.outlineVariant),
+      painter: _DashedRectPainter(color: context.colors.outlineVariant),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -230,7 +287,7 @@ class _DashedRectPainter extends CustomPainter {
   bool shouldRepaint(covariant _DashedRectPainter oldDelegate) => oldDelegate.color != color;
 }
 
-class _OptionRow extends StatelessWidget {
+class _OptionRow extends StatefulWidget {
   const _OptionRow({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
@@ -238,29 +295,56 @@ class _OptionRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_OptionRow> createState() => _OptionRowState();
+}
+
+class _OptionRowState extends State<_OptionRow> {
+  bool _isHovering = false;
+
+  @override
   Widget build(BuildContext context) {
-    return PushSurfaceButton(
-      onPressed: onTap,
-      borderRadius: 16,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.outlineVariant),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(width: 16),
-            Text(label, style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurface, fontSize: 15)),
+    return AnimatedScale(
+      scale: _isHovering ? 1.02 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: context.colors.vesitWhite,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: _isHovering ? [
+            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))
+          ] : [
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
           ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHover: (h) => setState(() => _isHovering = h),
+            onHighlightChanged: (h) => setState(() => _isHovering = h),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: context.colors.vesitPrimary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(widget.icon, color: context.colors.vesitPrimary),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(widget.label, style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitTextHeading, fontSize: 15)),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -275,19 +359,18 @@ class _RequirementsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
+        color: context.colors.vesitWhite,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.outlineVariant.withOpacity(0.5)),
-        boxShadow: const [BoxShadow(color: AppColors.primaryContainer, offset: Offset(-4, 0))],
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('IMAGE REQUIREMENTS', style: AppTextStyles.labelBold.copyWith(color: AppColors.primary)),
+          Text('IMAGE REQUIREMENTS', style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitPrimary)),
           const SizedBox(height: 4),
           Text(
             'Maximum file size: 5MB. Format: JPG, PNG, or GIF. Faces must be clearly visible for automated attendance check.',
-            style: AppTextStyles.labelSm,
+            style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -296,8 +379,10 @@ class _RequirementsCard extends StatelessWidget {
 }
 
 class _Footer extends StatelessWidget {
-  const _Footer({required this.onSave, required this.onCancel});
+  const _Footer({required this.isUploading, required this.hasFile, required this.onSave, required this.onCancel});
 
+  final bool isUploading;
+  final bool hasFile;
   final VoidCallback onSave;
   final VoidCallback onCancel;
 
@@ -305,22 +390,28 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        border: Border(top: BorderSide(color: AppColors.outlineVariant)),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
       ),
       child: Column(
         children: [
-          PushableButton(
-            label: 'Save Profile Picture',
-            icon: Icons.check_circle,
-            onPressed: onSave,
-          ),
+          if (isUploading)
+            const Center(child: CircularProgressIndicator())
+          else
+            PushableButton(
+              label: 'Save Profile Picture',
+              icon: Icons.check_circle,
+              onPressed: () {
+                if (hasFile) onSave();
+              },
+            ),
           const SizedBox(height: 8),
-          TextButton(
-            onPressed: onCancel,
-            child: Text('CANCEL', style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurfaceVariant)),
-          ),
+          if (!isUploading)
+            TextButton(
+              onPressed: onCancel,
+              child: Text('CANCEL', style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade600)),
+            ),
         ],
       ),
     );

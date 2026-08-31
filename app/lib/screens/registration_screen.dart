@@ -63,7 +63,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.wall,
+      backgroundColor: context.colors.wall,
       appBar: TactileAppBar(
         trailingTitle: _isFaculty ? 'FACULTY REGISTRATION' : 'STUDENT REGISTRATION',
       ),
@@ -80,13 +80,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Registration', style: AppTextStyles.headlineMd),
+                      Text('Registration', style: context.textStyles.headlineMd),
                       const SizedBox(height: 4),
                       Text(
                         _isFaculty
                             ? 'Create your faculty access node.'
                             : 'Fill in your physical hardware credentials.',
-                        style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                        style: context.textStyles.bodyMd.copyWith(color: context.colors.onSurfaceVariant),
                       ),
                       const SizedBox(height: 20),
                       DebossedField(
@@ -136,7 +136,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         children: [
                           Checkbox(
                             value: _agreedToTerms,
-                            activeColor: AppColors.primaryContainer,
+                            activeColor: context.colors.primaryContainer,
                             onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
                           ),
                           Expanded(
@@ -144,17 +144,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                               padding: const EdgeInsets.only(top: 12),
                               child: RichText(
                                 text: TextSpan(
-                                  style: AppTextStyles.labelMd,
+                                  style: context.textStyles.labelMd,
                                   children: [
                                     const TextSpan(text: 'I agree to the '),
                                     TextSpan(
                                       text: 'Terms & Conditions',
-                                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: context.colors.primary, fontWeight: FontWeight.bold),
                                     ),
                                     const TextSpan(text: ' and '),
                                     TextSpan(
                                       text: 'Privacy Policy',
-                                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: context.colors.primary, fontWeight: FontWeight.bold),
                                     ),
                                     const TextSpan(text: '.'),
                                   ],
@@ -175,13 +175,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Already have an account? ', style: AppTextStyles.bodyMd),
+                            Text('Already have an account? ', style: context.textStyles.bodyMd),
                             GestureDetector(
                               onTap: _goToLogin,
                               child: Text(
                                 'Login',
-                                style: AppTextStyles.labelMd.copyWith(
-                                  color: AppColors.primary,
+                                style: context.textStyles.labelMd.copyWith(
+                                  color: context.colors.primary,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

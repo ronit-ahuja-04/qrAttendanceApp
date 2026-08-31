@@ -1,24 +1,37 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'attendance_submitted_screen.dart';
-import 'account_settings_screen.dart';
+
 import '../ams/globals.dart';
+import '../ams/api_services.dart';
+import '../widgets/vesit_widgets.dart';
+import '../widgets/vesit_toast.dart';
 
 enum _MarkStatus { present, absent, unmarked }
 
 class _StudentRow {
   _StudentRow({
+    required this.id,
     required this.rollNo,
     required this.name,
+    this.division,
+    this.electiveBatch,
     required this.status,
     required this.method,
+    required this.isElective,
   });
 
+  final String id;
   final String rollNo;
   final String name;
+  final String? division;
+  final String? electiveBatch;
   _MarkStatus status;
-  final String method;
+  String method;
+  final bool isElective;
 }
 
 /// "Verify Attendance" — the faculty review step shown after a session's
@@ -29,8 +42,8 @@ class VerifyAttendanceScreen extends StatefulWidget {
   const VerifyAttendanceScreen({
     super.key,
     required this.sessionId,
-    this.subjectTitle = 'DBMS',
-    this.divisionLabel = 'DIV : D10A',
+    required this.subjectTitle,
+    required this.divisionLabel,
   });
 
   final String sessionId;
@@ -55,12 +68,51 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
     final list = await AmsGlobals.sessionService.getVerificationList(widget.sessionId);
     if (!mounted) return;
     setState(() {
-      _students = list.map((item) => _StudentRow(
-        rollNo: item['rollNo'] ?? 'N/A',
-        name: item['name'] ?? 'Unknown',
-        status: item['status'] == 'present' ? _MarkStatus.present : _MarkStatus.absent,
-        method: item['method'] ?? 'Not Marked / Timeout',
-      )).toList();
+      _students = list.map((item) {
+        String rawName = item['name'] ?? 'Unknown';
+        String email = item['email'] ?? '';
+        
+        // Always extract clean First/Last name from their standard VES email format
+        String formattedName = AmsGlobals.formatStudentName(rawName, email);
+
+        return _StudentRow(
+          id: item['studentId'] ?? item['id'] ?? '',
+          rollNo: item['rollNo'] ?? 'N/A',
+          name: formattedName,
+          division: item['division'],
+          electiveBatch: item['electiveBatch'],
+          status: (item['status'] == 'present' || item['status'] == 'pending') ? _MarkStatus.present : _MarkStatus.absent,
+          method: item['method'] ?? 'Not Marked',
+          isElective: widget.subjectTitle.toLowerCase().contains('soft computing') || widget.subjectTitle.toLowerCase().contains('admt'),
+        );
+      }).toList();
+      
+      // Sort alphanumerically by roll number
+      int compareAlphanumeric(String a, String b) {
+        final regExp = RegExp(r'(\d+|\D+)');
+        final aMatches = regExp.allMatches(a).map((m) => m.group(0)!).toList();
+        final bMatches = regExp.allMatches(b).map((m) => m.group(0)!).toList();
+        
+        for (int i = 0; i < aMatches.length && i < bMatches.length; i++) {
+          final aPart = aMatches[i];
+          final bPart = bMatches[i];
+          
+          final aInt = int.tryParse(aPart);
+          final bInt = int.tryParse(bPart);
+          
+          if (aInt != null && bInt != null) {
+            final comp = aInt.compareTo(bInt);
+            if (comp != 0) return comp;
+          } else {
+            final comp = aPart.compareTo(bPart);
+            if (comp != 0) return comp;
+          }
+        }
+        return aMatches.length.compareTo(bMatches.length);
+      }
+      
+      _students.sort((a, b) => compareAlphanumeric(a.rollNo, b.rollNo));
+
       _isLoading = false;
     });
   }
@@ -68,21 +120,48 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
   int get _presentCount => _students.where((s) => s.status == _MarkStatus.present).length;
 
   void _setStatus(_StudentRow row, _MarkStatus status) {
-    setState(() => row.status = status);
+    setState(() {
+      row.status = status;
+      row.method = 'Manually Marked';
+    });
   }
 
-  void _confirmAndSubmit() {
+  Future<void> _confirmAndSubmit() async {
+    setState(() => _isLoading = true);
     final total = _students.length;
     final present = _presentCount;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => AttendanceSubmittedScreen(
-          subjectTitle: '${widget.subjectTitle} (${widget.divisionLabel.replaceAll('DIV : ', 'Div ')})',
-          presentCount: present,
-          absentCount: total - present,
-        ),
-      ),
-    );
+
+    final updates = _students.map((s) => {
+      'studentId': s.id,
+      'status': s.status == _MarkStatus.present ? 'present' : 'absent'
+    }).toList();
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/sessions/${widget.sessionId}/attendance/finalize'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'updates': updates}),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => AttendanceSubmittedScreen(
+              subjectTitle: '${widget.subjectTitle} (${widget.divisionLabel.replaceAll('DIV : ', 'Div ')})',
+              presentCount: present,
+              absentCount: total - present,
+            ),
+          ),
+        );
+      } else {
+        throw Exception('Failed to finalize attendance');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        VesitToast.show(context: context, title: 'Error: $e', type: ToastType.info);
+      }
+    }
   }
 
   @override
@@ -92,34 +171,47 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
     final percent = total == 0 ? 0 : ((present / total) * 100).round();
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: Column(
+      backgroundColor: context.colors.vesitWhite,
+      appBar: AppBar(
+        backgroundColor: context.colors.vesitPrimary,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: context.colors.vesitWhite),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        centerTitle: true,
+        title: Column(
           children: [
-            _VerifyHeader(
-              title: 'Verify Attendance',
-              subtitle: '${widget.subjectTitle} | ${widget.divisionLabel}',
-              onBack: () => Navigator.of(context).maybePop(),
-              onSettings: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-                );
-              },
-            ),
+            Text('Verify Attendance', style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitWhite)),
+            const SizedBox(height: 2),
+            Text('${widget.subjectTitle} | ${widget.divisionLabel}', style: context.textStyles.vesitBodyMd.copyWith(color: context.colors.vesitWhite.withOpacity(0.8))),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(4),
+          child: Container(
+            height: 4,
+            color: context.colors.vesitGold, // Progressive yellow line
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
             if (_isLoading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
+              const Center(child: CircularProgressIndicator())
             else
-              Expanded(
+              Positioned.fill(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // padding at bottom so button doesn't hide last item
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _SummaryBar(present: present, total: total, percent: percent),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
                       ..._students.map(
                         (row) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: _StudentTile(
                             row: row,
                             onSetStatus: (status) => _setStatus(row, status),
@@ -130,7 +222,16 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
                   ),
                 ),
               ),
-            if (!_isLoading) _ConfirmBar(onPressed: _confirmAndSubmit),
+            if (!_isLoading)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: VesitButton(
+                  label: 'CONFIRM & SUBMIT ATTENDANCE',
+                  onPressed: _confirmAndSubmit,
+                ),
+              ),
           ],
         ),
       ),
@@ -138,86 +239,7 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
   }
 }
 
-class _VerifyHeader extends StatelessWidget {
-  const _VerifyHeader({
-    required this.title,
-    required this.subtitle,
-    required this.onBack,
-    required this.onSettings,
-  });
 
-  final String title;
-  final String subtitle;
-  final VoidCallback onBack;
-  final VoidCallback onSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: AppColors.surface,
-      child: Row(
-        children: [
-          _RoundIconButton(icon: Icons.arrow_back, onPressed: onBack),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title, style: AppTextStyles.headlineSm),
-                Text(subtitle, style: AppTextStyles.labelSm),
-              ],
-            ),
-          ),
-          _RoundIconButton(icon: Icons.settings, onPressed: onSettings),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatefulWidget {
-  const _RoundIconButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  State<_RoundIconButton> createState() => _RoundIconButtonState();
-}
-
-class _RoundIconButtonState extends State<_RoundIconButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onPressed,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _pressed ? AppColors.debossedWell : AppColors.surfaceContainerLow,
-          border: Border.all(color: AppColors.outlineVariant),
-          boxShadow: _pressed
-              ? [const BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))]
-              : [
-                  const BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2)),
-                ],
-        ),
-        child: Icon(widget.icon, color: AppColors.onSurface, size: 20),
-      ),
-    );
-  }
-}
 
 class _SummaryBar extends StatelessWidget {
   const _SummaryBar({required this.present, required this.total, required this.percent});
@@ -229,63 +251,80 @@ class _SummaryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
-        border: Border.all(color: AppColors.outline),
+        color: context.colors.vesitPrimary, // Navy blue background
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          const BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: context.colors.vesitPrimary.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'DIVISION A - ATTENDANCE SUMMARY',
-            style: AppTextStyles.labelBold.copyWith(letterSpacing: 1),
+            'ATTENDANCE SUMMARY',
+            style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitGold, letterSpacing: 1.2),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               RichText(
                 text: TextSpan(
-                  style: AppTextStyles.headlineMd.copyWith(color: AppColors.primary),
+                  style: context.textStyles.vesitHeadlineLg.copyWith(color: context.colors.vesitWhite),
                   children: [
                     TextSpan(text: '$present '),
                     TextSpan(
                       text: '/ $total Present',
-                      style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 20, fontWeight: FontWeight.w400),
+                      style: context.textStyles.vesitBodyMd.copyWith(color: context.colors.vesitWhite.withOpacity(0.8)),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryContainer,
-                  borderRadius: BorderRadius.circular(999),
+                  color: context.colors.vesitGold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: context.colors.vesitGold.withOpacity(0.5)),
                 ),
                 child: Text(
-                  '$percent% RATE',
-                  style: AppTextStyles.labelBold.copyWith(color: AppColors.onPrimaryContainer),
+                  '$percent%',
+                  style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitGold),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           ClipRRect(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(8),
             child: Container(
-              height: 8,
-              color: AppColors.errorContainer,
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: total == 0 ? 0 : (present / total).clamp(0.0, 1.0),
-                child: Container(color: const Color(0xFF22C55E)),
+              height: 10,
+              width: double.infinity,
+              color: context.colors.vesitWhite.withOpacity(0.1),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final factor = total == 0 ? 0.0 : (present / total).clamp(0.0, 1.0);
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.fastOutSlowIn,
+                      width: constraints.maxWidth * factor,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: context.colors.vesitGold,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -308,193 +347,204 @@ class _StudentTile extends StatelessWidget {
     switch (row.status) {
       case _MarkStatus.present:
         statusIcon = Icons.check_circle;
-        statusColor = const Color(0xFF15803D);
+        statusColor = const Color(0xFF15803D); // Green
         break;
       case _MarkStatus.absent:
         statusIcon = Icons.cancel;
-        statusColor = const Color(0xFF93000A);
+        statusColor = const Color(0xFF93000A); // Red
         break;
       case _MarkStatus.unmarked:
         statusIcon = Icons.help;
-        statusColor = AppColors.onSurfaceVariant;
+        statusColor = Colors.grey.shade500;
         break;
     }
 
-    return Opacity(
-      opacity: row.status == _MarkStatus.unmarked ? 0.75 : 1,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          border: Border.all(color: AppColors.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            const BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2)),
-          ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: row.status == _MarkStatus.unmarked ? Colors.transparent : statusColor.withOpacity(0.2),
+          width: 1.5,
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(6),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2), spreadRadius: -1),
-                ],
-              ),
-              child: Text(row.rollNo, style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: context.colors.vesitPrimary.withOpacity(0.05),
+              border: Border.all(color: context.colors.vesitPrimary.withOpacity(0.1)),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    row.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurface, fontSize: 13),
-                  ),
+            child: Text(
+              row.rollNo.replaceAll(RegExp(r'[^0-9]'), ''), // Just show the numbers if possible
+              style: context.textStyles.vesitHeadlineSm.copyWith(fontSize: 16, color: context.colors.vesitPrimary),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  row.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitPrimary, fontSize: 15),
+                ),
+                if (row.isElective && row.division != null && row.electiveBatch != null) ...[
                   const SizedBox(height: 2),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 4),
-                      Text(row.method, style: AppTextStyles.labelSm.copyWith(color: statusColor)),
-                    ],
+                  Text(
+                    '${row.division} - ${row.electiveBatch}',
+                    style: context.textStyles.vesitBodySm.copyWith(color: context.colors.vesitPrimary.withOpacity(0.6), fontWeight: FontWeight.w600),
                   ),
                 ],
-              ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 6),
+                    Text(row.method, style: context.textStyles.vesitBodyMd.copyWith(color: statusColor, fontSize: 13)),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.outlineVariant),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 1)),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PAButton(
-                    label: 'P',
-                    active: row.status == _MarkStatus.present,
-                    activeBg: const Color(0xFFD4EDDA),
-                    activeFg: const Color(0xFF155724),
-                    onTap: () => onSetStatus(_MarkStatus.present),
-                  ),
-                  _PAButton(
-                    label: 'A',
-                    active: row.status == _MarkStatus.absent,
-                    activeBg: AppColors.errorContainer,
-                    activeFg: const Color(0xFF93000A),
-                    onTap: () => onSetStatus(_MarkStatus.absent),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 12),
+          _PAToggle(
+            status: row.status,
+            onChanged: onSetStatus,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _PAButton extends StatelessWidget {
-  const _PAButton({
-    required this.label,
-    required this.active,
-    required this.activeBg,
-    required this.activeFg,
-    required this.onTap,
+class _PAToggle extends StatelessWidget {
+  const _PAToggle({
+    required this.status,
+    required this.onChanged,
   });
 
-  final String label;
-  final bool active;
-  final Color activeBg;
-  final Color activeFg;
-  final VoidCallback onTap;
+  final _MarkStatus status;
+  final ValueChanged<_MarkStatus> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? activeBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: active
-              ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1))]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelBold.copyWith(
-            color: active ? activeFg : AppColors.onSurfaceVariant,
-          ),
-        ),
+    const double width = 94; // Increased from 84 to prevent clipping of the 'A'
+    const double height = 44;
+    const double padding = 4;
+    const double pillWidth = (width - (padding * 2)) / 2;
+
+    return Container(
+      width: 140,
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.colors.vesitGray.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: context.colors.vesitGray, width: 1),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double pillWidth = constraints.maxWidth / 2;
+          
+          double leftOffset;
+          Color pillColor;
+          double pillOpacity;
+
+          switch (status) {
+            case _MarkStatus.present:
+              leftOffset = 0;
+              pillColor = const Color(0xFF15803D);
+              pillOpacity = 1.0;
+              break;
+            case _MarkStatus.absent:
+              leftOffset = pillWidth;
+              pillColor = const Color(0xFF93000A);
+              pillOpacity = 1.0;
+              break;
+            case _MarkStatus.unmarked:
+            default:
+              leftOffset = pillWidth / 2;
+              pillColor = Colors.grey.shade400;
+              pillOpacity = 0.0;
+              break;
+          }
+
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+                left: leftOffset,
+                top: 0,
+                bottom: 0,
+                width: pillWidth,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 400),
+                  opacity: pillOpacity,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    decoration: BoxDecoration(
+                      color: pillColor,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: pillColor.withOpacity(0.4),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  _buildOption(context, 'Present', _MarkStatus.present),
+                  _buildOption(context, 'Absent', _MarkStatus.absent),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
-}
 
-class _ConfirmBar extends StatefulWidget {
-  const _ConfirmBar({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  State<_ConfirmBar> createState() => _ConfirmBarState();
-}
-
-class _ConfirmBarState extends State<_ConfirmBar> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-      color: AppColors.surface,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
-          decoration: BoxDecoration(
-            color: _pressed ? AppColors.debossedWell : AppColors.primaryContainer,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.outlineVariant),
-            boxShadow: _pressed
-                ? [const BoxShadow(color: Color(0x33000000), blurRadius: 4)]
-                : [
-                    const BoxShadow(color: Colors.white, offset: Offset(0, 1)),
-                    BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
-                  ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            'CONFIRM & SUBMIT ATTENDANCE',
-            style: AppTextStyles.labelBold.copyWith(
-              color: AppColors.onPrimaryContainer,
-              fontSize: 15,
-              letterSpacing: 0.5,
+  Widget _buildOption(BuildContext context, String label, _MarkStatus targetStatus) {
+    final bool isActive = status == targetStatus;
+    return Expanded(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(targetStatus),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: context.textStyles.vesitLabelBold.copyWith(
+                color: isActive ? context.colors.vesitWhite : Colors.grey.shade600,
+                fontSize: 14,
+              ),
+              child: Text(label),
             ),
           ),
         ),
@@ -502,3 +552,7 @@ class _ConfirmBarState extends State<_ConfirmBar> {
     );
   }
 }
+
+
+
+

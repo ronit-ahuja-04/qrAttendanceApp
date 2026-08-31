@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
+import '../widgets/vesit_widgets.dart';
 import 'session_calendar_screen.dart';
 import 'student_dashboard_screen.dart';
+import '../ams/globals.dart';
 
 enum _AttendanceStatus { present, missed }
 
@@ -26,7 +28,8 @@ class _AttendanceEntry {
 }
 
 class _DayGroup {
-  const _DayGroup({required this.label, required this.entries, this.dim = false});
+  const _DayGroup(
+      {required this.label, required this.entries, this.dim = false});
 
   final String label;
   final List<_AttendanceEntry> entries;
@@ -36,145 +39,212 @@ class _DayGroup {
 /// Attendance History — mirrors the "Attendance History - VESIT System"
 /// Stitch export (code.html): active-session banner, today/attended/missed
 /// stat wells, today's class log, and a day-grouped history list below.
-class AttendanceHistoryScreen extends StatelessWidget {
-  const AttendanceHistoryScreen({super.key});
+class AttendanceHistoryScreen extends StatefulWidget {
+  final ScrollController? scrollController;
+  const AttendanceHistoryScreen({super.key, this.scrollController});
 
-  static const _today = [
-    _AttendanceEntry(
-      subject: 'Java Programming',
-      time: '09:00 - 10:30 | Lab 402',
-      location: 'Lab 402',
-      status: _AttendanceStatus.present,
-      professor: 'Prof. R. Deshmukh',
-    ),
-    _AttendanceEntry(
-      subject: 'Computer Networks',
-      time: '11:00 - 12:30 | Room 501',
-      location: 'Room 501',
-      status: _AttendanceStatus.missed,
-      professor: 'Prof. S. Mehta',
-    ),
-    _AttendanceEntry(
-      subject: 'Digital Logic',
-      time: '01:30 - 03:00 | Lab 405',
-      location: 'Lab 405',
-      status: _AttendanceStatus.present,
-      professor: 'Dr. K. Iyer',
-    ),
-  ];
+  @override
+  State<AttendanceHistoryScreen> createState() =>
+      _AttendanceHistoryScreenState();
+}
 
-  static const _earlierThisWeek = [
-    _DayGroup(
-      label: 'Yesterday, Oct 23',
-      entries: [
-        _AttendanceEntry(
-          subject: 'Data Structures',
-          time: '09:00 - 11:00 | Hall A',
-          location: 'Hall A',
-          status: _AttendanceStatus.present,
-          compact: true,
-        ),
-      ],
-    ),
-    _DayGroup(
-      label: 'Oct 22',
-      dim: true,
-      entries: [
-        _AttendanceEntry(
-          subject: 'Cyber Ethics',
-          time: '02:00 - 04:00 | Seminar Hall',
-          location: 'Seminar Hall',
-          status: _AttendanceStatus.present,
-          compact: true,
-        ),
-      ],
-    ),
-  ];
+class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
+  List<_AttendanceEntry> _today = [];
+  List<_DayGroup> _earlierThisWeek = [];
+  bool _loading = true;
+  int _totalCount = 0;
+  int _attendedCount = 0;
+  int _missedCount = 0;
 
-  void _openCalendarFilter(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SessionCalendarScreen()),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
   }
 
-  void _switchSession(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SessionCalendarScreen()),
-    );
+  Future<void> _loadHistory() async {
+    final studentId = AmsGlobals.loggedInUser?.id;
+    if (studentId == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
+    final history =
+        await AmsGlobals.sessionService.getStudentAttendanceHistory(studentId);
+
+    final today = DateTime.now();
+    final todayStr =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+    final List<_AttendanceEntry> todayEntries = [];
+    final Map<String, List<_AttendanceEntry>> groupMap = {};
+
+    for (var h in history) {
+      final dateIso = h['date'] as String;
+      final dt = DateTime.parse(dateIso).toLocal();
+      final dtStr =
+          "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+
+      final entry = _AttendanceEntry(
+        subject: h['subject'] ?? 'Unknown',
+        time: h['time'] ?? '--',
+        location: h['location'] ?? 'Campus',
+        status: h['status'] == 'present'
+            ? _AttendanceStatus.present
+            : _AttendanceStatus.missed,
+        professor: h['professor'] ?? 'Unknown Faculty',
+        compact: dtStr != todayStr, // compact for earlier days
+      );
+
+      if (dtStr == todayStr) {
+        todayEntries.add(entry);
+      } else {
+        final Map<int, String> months = {
+          1: 'Jan',
+          2: 'Feb',
+          3: 'Mar',
+          4: 'Apr',
+          5: 'May',
+          6: 'Jun',
+          7: 'Jul',
+          8: 'Aug',
+          9: 'Sep',
+          10: 'Oct',
+          11: 'Nov',
+          12: 'Dec'
+        };
+        final isYesterday = DateTime(today.year, today.month, today.day)
+                .difference(DateTime(dt.year, dt.month, dt.day))
+                .inDays ==
+            1;
+        final label = isYesterday
+            ? 'Yesterday, ${months[dt.month]} ${dt.day}'
+            : '${months[dt.month]} ${dt.day}';
+
+        groupMap.putIfAbsent(label, () => []).add(entry);
+      }
+    }
+
+    final List<_DayGroup> earlier = [];
+    bool dimFlag = false;
+
+    // Sort groupMap keys (dates) descending to pick top 5
+    // But our keys are "Yesterday, Oct 23" which is hard to sort.
+    // Actually the history is already sorted DESC from backend!
+    int count = 0;
+    groupMap.forEach((label, entries) {
+      if (count < 5) {
+        earlier.add(_DayGroup(label: label, entries: entries, dim: dimFlag));
+        dimFlag = !dimFlag;
+        count++;
+      }
+    });
+
+    int attended = 0;
+    int missed = 0;
+    for (var h in history) {
+      if (h['status'] == 'present')
+        attended++;
+      else
+        missed++;
+    }
+
+    if (mounted) {
+      setState(() {
+        _today = todayEntries;
+        _earlierThisWeek = earlier;
+        _totalCount = history.length;
+        _attendedCount = attended;
+        _missedCount = missed;
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.wall,
+      backgroundColor: context.colors.vesitGray,
       body: SafeArea(
         child: Stack(
           children: [
-            Column(
-              children: [
-                _Header(
-                  onBack: () {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    } else {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const StudentDashboardScreen()),
-                      );
-                    }
-                  },
-                  onFilterTap: () => _openCalendarFilter(context),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    children: [
-                      _ActiveSessionBanner(onSwap: () => _switchSession(context)),
-                      const SizedBox(height: 12),
-                      const _StatsRow(),
-                      const SizedBox(height: 24),
-                      const _SectionDivider(title: "Today's Log"),
-                      const SizedBox(height: 10),
-                      ..._today.map(
-                        (e) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _AttendanceCard(entry: e),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const _SectionDivider(title: 'Earlier This Week'),
-                      const SizedBox(height: 10),
-                      ..._earlierThisWeek.map(
-                        (day) => Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: Opacity(
-                            opacity: day.dim ? 0.8 : 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                                  child: Text(day.label, style: AppTextStyles.labelMd.copyWith(fontSize: 13)),
-                                ),
-                                ...day.entries.map(
-                                  (e) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: _AttendanceCard(entry: e),
-                                  ),
-                                ),
-                              ],
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else
+              Column(
+                children: [
+                  const _Header(),
+                  Expanded(
+                    child: ListView(
+                      controller: widget.scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
+                      children: [
+                        _DateBanner(),
+                        const SizedBox(height: 12),
+                        _StatsRow(
+                            total: _totalCount,
+                            attended: _attendedCount,
+                            missed: _missedCount),
+                        const SizedBox(height: 24),
+                        const _SectionDivider(title: "Today's Log"),
+                        const SizedBox(height: 10),
+                        if (_today.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text('No log yet!',
+                                style: TextStyle(color: Colors.grey.shade500)),
+                          )
+                        else
+                          ..._today.map(
+                            (e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _AttendanceCard(entry: e),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        const _SectionDivider(title: 'Earlier This Week'),
+                        const SizedBox(height: 10),
+                        if (_earlierThisWeek.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text('-',
+                                style: TextStyle(
+                                    color: Colors.grey.shade500, fontSize: 24)),
+                          )
+                        else
+                          ..._earlierThisWeek.map(
+                            (day) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: Opacity(
+                                opacity: day.dim ? 0.8 : 1,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 4, bottom: 6),
+                                      child: Text(day.label,
+                                          style: context.textStyles.labelMd
+                                              .copyWith(fontSize: 13)),
+                                    ),
+                                    ...day.entries.map(
+                                      (e) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
+                                        child: _AttendanceCard(entry: e),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const Align(
-              alignment: Alignment.bottomCenter,
-              child: TactileBottomNav(currentIndex: 1),
-            ),
+                ],
+              ),
+            
           ],
         ),
       ),
@@ -183,52 +253,63 @@ class AttendanceHistoryScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onBack, required this.onFilterTap});
-
-  final VoidCallback onBack;
-  final VoidCallback onFilterTap;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: onBack,
-            child: const Icon(Icons.arrow_back, color: AppColors.onSurface, size: 24),
-          ),
-          Expanded(
-            child: Text(
-              'Attendance History',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSm,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          GestureDetector(
-            onTap: onFilterTap,
-            child: const Icon(Icons.calendar_month, color: AppColors.primary, size: 24),
-          ),
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
         ],
+      ),
+      child: Center(
+        child: Text(
+          'Attendance History',
+          textAlign: TextAlign.center,
+          style: context.textStyles.vesitHeadlineSm
+              .copyWith(color: context.colors.vesitPrimary),
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }
 }
 
-class _ActiveSessionBanner extends StatelessWidget {
-  const _ActiveSessionBanner({required this.onSwap});
-
-  final VoidCallback onSwap;
+class _DateBanner extends StatelessWidget {
+  const _DateBanner();
 
   @override
   Widget build(BuildContext context) {
-    return RaisedPanel(
-      borderRadius: 16,
+    final now = DateTime.now();
+    final Map<int, String> days = {
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday',
+      6: 'Saturday',
+      7: 'Sunday'
+    };
+    final Map<int, String> months = {
+      1: 'Jan',
+      2: 'Feb',
+      3: 'Mar',
+      4: 'Apr',
+      5: 'May',
+      6: 'Jun',
+      7: 'Jul',
+      8: 'Aug',
+      9: 'Sep',
+      10: 'Oct',
+      11: 'Nov',
+      12: 'Dec'
+    };
+
+    return VesitCard(
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
@@ -239,20 +320,15 @@ class _ActiveSessionBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ACTIVE SESSION',
-                  style: AppTextStyles.labelBold.copyWith(letterSpacing: 1.2),
+                  'TODAY\'S DATE',
+                  style: context.textStyles.vesitLabelBold.copyWith(
+                      letterSpacing: 1.2, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 2),
-                const Text('Today, Oct 24', style: AppTextStyles.headlineSm),
+                Text(
+                    '${days[now.weekday]}, ${months[now.month]} ${now.day} ${now.year}',
+                    style: context.textStyles.vesitHeadlineSm),
               ],
-            ),
-          ),
-          PushSurfaceButton(
-            onPressed: onSwap,
-            borderRadius: 10,
-            child: const Padding(
-              padding: EdgeInsets.all(10),
-              child: Icon(Icons.swap_horiz, color: AppColors.primary, size: 22),
             ),
           ),
         ],
@@ -262,24 +338,39 @@ class _ActiveSessionBanner extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+  const _StatsRow(
+      {required this.total, required this.attended, required this.missed});
+  final int total;
+  final int attended;
+  final int missed;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: _StatWell(label: 'Total', value: '4 Classes', valueColor: AppColors.onSurface)),
-        SizedBox(width: 8),
-        Expanded(child: _StatWell(label: 'Attended', value: '3', valueColor: AppColors.primary)),
-        SizedBox(width: 8),
-        Expanded(child: _StatWell(label: 'Missed', value: '1', valueColor: AppColors.error)),
+        Expanded(
+            child: _StatWell(
+                label: 'Total',
+                value: '$total',
+                valueColor: context.colors.vesitTextHeading)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _StatWell(
+                label: 'Attended',
+                value: '$attended',
+                valueColor: context.colors.vesitPrimary)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _StatWell(
+                label: 'Missed', value: '$missed', valueColor: Colors.red)),
       ],
     );
   }
 }
 
 class _StatWell extends StatelessWidget {
-  const _StatWell({required this.label, required this.value, required this.valueColor});
+  const _StatWell(
+      {required this.label, required this.value, required this.valueColor});
 
   final String label;
   final String value;
@@ -287,16 +378,23 @@ class _StatWell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DebossedWell(
-      borderRadius: 12,
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       child: Column(
         children: [
-          Text(label, style: AppTextStyles.labelSm),
+          Text(label,
+              style: context.textStyles.vesitLabelSm
+                  .copyWith(color: Colors.grey.shade600)),
           const SizedBox(height: 4),
           Text(
             value,
-            style: AppTextStyles.labelBold.copyWith(fontSize: 16, color: valueColor),
+            style: context.textStyles.vesitLabelBold
+                .copyWith(fontSize: 16, color: valueColor),
           ),
         ],
       ),
@@ -315,11 +413,12 @@ class _SectionDivider extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: AppTextStyles.labelBold.copyWith(color: AppColors.onSurfaceVariant, letterSpacing: 1.2),
+          style: context.textStyles.vesitLabelBold
+              .copyWith(color: Colors.grey.shade600, letterSpacing: 1.2),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Container(height: 1, color: AppColors.outlineVariant.withOpacity(0.3)),
+          child: Container(height: 1, color: Colors.grey.shade300),
         ),
       ],
     );
@@ -334,11 +433,11 @@ class _AttendanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final present = entry.status == _AttendanceStatus.present;
-    final badgeBg = present ? const Color(0xFFE8F5E9) : AppColors.error.withOpacity(0.12);
-    final badgeFg = present ? const Color(0xFF2E7D32) : AppColors.error;
+    final badgeBg =
+        present ? const Color(0xFFE8F5E9) : Colors.red.withOpacity(0.12);
+    final badgeFg = present ? const Color(0xFF2E7D32) : Colors.red;
 
-    return RaisedPanel(
-      borderRadius: 16,
+    return VesitCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +452,7 @@ class _AttendanceCard extends StatelessWidget {
                     fontFamily: 'Karla',
                     fontWeight: FontWeight.bold,
                     fontSize: entry.compact ? 15 : 16,
-                    color: AppColors.onSurface,
+                    color: context.colors.vesitTextHeading,
                   ),
                 ),
               ),
@@ -374,7 +473,8 @@ class _AttendanceCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       present ? 'PRESENT' : 'MISSED',
-                      style: AppTextStyles.labelBold.copyWith(fontSize: 11, color: badgeFg),
+                      style: context.textStyles.vesitLabelBold
+                          .copyWith(fontSize: 11, color: badgeFg),
                     ),
                   ],
                 ),
@@ -384,12 +484,13 @@ class _AttendanceCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              const Icon(Icons.schedule, size: 14, color: AppColors.secondary),
+              Icon(Icons.schedule, size: 14, color: Colors.grey.shade500),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   entry.time,
-                  style: AppTextStyles.labelMd.copyWith(fontSize: 12),
+                  style: context.textStyles.vesitBodyMd
+                      .copyWith(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ),
             ],
@@ -398,7 +499,8 @@ class _AttendanceCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               entry.professor!,
-              style: AppTextStyles.labelSm.copyWith(fontWeight: FontWeight.w600),
+              style: context.textStyles.vesitLabelSm.copyWith(
+                  fontWeight: FontWeight.w600, color: Colors.grey.shade600),
             ),
           ],
         ],

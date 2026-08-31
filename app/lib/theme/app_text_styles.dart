@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 /// Text styles mirroring the design tokens (Familjen Grotesk for
@@ -7,71 +8,137 @@ import 'app_colors.dart';
 /// dependencies -- swap `fontFamily` below for GoogleFonts.familjenGrotesk()
 /// / GoogleFonts.karla() if you add the google_fonts package later.
 class AppTextStyles {
-  AppTextStyles._();
+  final BuildContext context;
+  AppTextStyles(this.context);
 
-  static const _display = 'FamiljenGrotesk';
-  static const _body = 'Karla';
+  final _display = 'FamiljenGrotesk';
+  final _body = 'Karla';
 
-  static const displayLg = TextStyle(
+  TextStyle get displayLg => TextStyle(
     fontFamily: _display,
     fontSize: 40,
     fontWeight: FontWeight.w700,
     height: 1.1,
     letterSpacing: -0.5,
-    color: AppColors.primary,
+    color: context.colors.primary,
   );
 
-  static const headlineMd = TextStyle(
+  TextStyle get headlineMd => TextStyle(
     fontFamily: _display,
     fontSize: 28,
     fontWeight: FontWeight.w600,
     height: 1.2,
-    color: AppColors.onSurface,
+    color: context.colors.onSurface,
   );
 
-  static const headlineSm = TextStyle(
+  TextStyle get headlineSm => TextStyle(
     fontFamily: _display,
     fontSize: 22,
     fontWeight: FontWeight.w600,
     height: 1.3,
-    color: AppColors.onSurface,
+    color: context.colors.onSurface,
   );
 
-  static const bodyLg = TextStyle(
+  TextStyle get bodyLg => TextStyle(
     fontFamily: _body,
     fontSize: 17,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    color: AppColors.onSurfaceVariant,
+    color: context.colors.onSurfaceVariant,
   );
 
-  static const bodyMd = TextStyle(
+  TextStyle get bodyMd => TextStyle(
     fontFamily: _body,
     fontSize: 15,
     fontWeight: FontWeight.w400,
     height: 1.4,
-    color: AppColors.onSurface,
+    color: context.colors.onSurface,
   );
 
-  static const labelBold = TextStyle(
+  TextStyle get labelBold => TextStyle(
     fontFamily: _body,
     fontSize: 13,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.6,
-    color: AppColors.onSurfaceVariant,
+    color: context.colors.onSurfaceVariant,
   );
 
-  static const labelMd = TextStyle(
+  TextStyle get labelMd => TextStyle(
     fontFamily: _body,
     fontSize: 13,
     fontWeight: FontWeight.w500,
-    color: AppColors.onSurfaceVariant,
+    color: context.colors.onSurfaceVariant,
   );
 
-  static const labelSm = TextStyle(
+  TextStyle get labelSm => TextStyle(
     fontFamily: _body,
     fontSize: 11,
     fontWeight: FontWeight.w500,
-    color: AppColors.onSurfaceVariant,
+    color: context.colors.onSurfaceVariant,
   );
+
+  // VESIT Text Styles
+  TextStyle get vesitHeadlineLg => GoogleFonts.oswald(
+    fontSize: 48,
+    fontWeight: FontWeight.w600,
+    color: context.colors.vesitTextHeading,
+    height: 1.2,
+  );
+
+  TextStyle get vesitHeadlineMd => GoogleFonts.oswald(
+    fontSize: 32,
+    fontWeight: FontWeight.w600,
+    color: context.colors.vesitTextHeading,
+    height: 1.2,
+  );
+
+  TextStyle get vesitHeadlineSm => GoogleFonts.oswald(
+    fontSize: 24,
+    fontWeight: FontWeight.w600,
+    color: context.colors.vesitTextHeading,
+    height: 1.2,
+  );
+
+  TextStyle get vesitBodyLg => GoogleFonts.roboto(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    color: context.colors.vesitTextBody,
+  );
+
+  TextStyle get vesitBodyMd => GoogleFonts.roboto(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: context.colors.vesitTextBody,
+  );
+
+  TextStyle get vesitBodySm => GoogleFonts.roboto(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    color: context.colors.vesitTextBody,
+  );
+
+  TextStyle get vesitLabelBold => GoogleFonts.roboto(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: context.colors.vesitTextHeading,
+    letterSpacing: 0.5,
+  );
+
+  TextStyle get vesitLabelSm => GoogleFonts.roboto(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    color: context.colors.vesitTextBody,
+    letterSpacing: 0.5,
+  );
+
+  TextStyle get vesitButtonText => GoogleFonts.oswald(
+    fontSize: 18,
+    fontWeight: FontWeight.w500,
+    color: context.colors.vesitWhite,
+    letterSpacing: 1.0,
+  );
+}
+
+extension AppTextStylesExtension on BuildContext {
+  AppTextStyles get textStyles => AppTextStyles(this);
 }
