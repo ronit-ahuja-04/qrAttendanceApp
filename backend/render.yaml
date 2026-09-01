@@ -2,6 +2,7 @@ services:
   - type: web
     name: qr-attendance-api
     env: node
+    rootDir: backend
     plan: free
     region: oregon
     buildCommand: npm install
