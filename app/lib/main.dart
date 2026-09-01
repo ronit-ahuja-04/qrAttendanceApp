@@ -4,6 +4,7 @@ import 'screens/login_screen.dart';
 import 'theme/app_colors.dart';
 import 'ams/notification_service.dart';
 import 'ams/globals.dart';
+import 'ams/api_services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'dart:convert';
@@ -108,6 +109,12 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
         final user = User.fromJson(userMap);
         AmsGlobals.loggedInUser = user;
         
+        // Ensure FCM token is synced since BootLoader bypassed the login screen
+        final token = NotificationService().currentToken;
+        if (token != null) {
+          ApiSessionService().updateFcmToken(user.id, token).catchError((_) {});
+        }
+
         if (!mounted) return;
         if (user.role == 'faculty') {
           Navigator.of(context).pushReplacement(

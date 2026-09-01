@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'notification_service.dart';
 import 'globals.dart';
@@ -302,14 +303,15 @@ class ApiSessionService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final url = data['profilePictureUrl'];
-        return AmsGlobals.loggedInUser = User(
-          id: AmsGlobals.loggedInUser!.id,
-          role: AmsGlobals.loggedInUser!.role,
-          name: AmsGlobals.loggedInUser!.name,
-          email: AmsGlobals.loggedInUser!.email,
-          rollNo: AmsGlobals.loggedInUser!.rollNo,
-          profilePictureUrl: url,
-        );
+        if (AmsGlobals.loggedInUser != null) {
+          AmsGlobals.loggedInUser = AmsGlobals.loggedInUser!.copyWith(
+            profilePictureUrl: url,
+          );
+          
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('ams_user_session', jsonEncode(AmsGlobals.loggedInUser!.toJson()));
+        }
+        return AmsGlobals.loggedInUser;
       }
       return null;
     } catch (e) {

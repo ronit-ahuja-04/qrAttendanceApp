@@ -1543,12 +1543,18 @@ app.get('/timetable', (req, res) => {
 app.get('/timetable/:facultyId', (req, res) => {
   const facultyId = req.params.facultyId;
   const today = new Date().toISOString().split('T')[0];
+  const todayStart = `${today} 00:00:00`;
+  const todayEnd = `${today} 23:59:59`;
 
   db.all(`SELECT * FROM timetable_slots WHERE facultyId = ?`, [facultyId], (err, slots) => {
     if (err) return res.status(500).json({ error: err.message });
 
     // Fetch today's sessions for this faculty to prevent duplicate QR generation
-    db.all(`SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND date(createdAt) = ?`, [facultyId, today], (err, sessions) => {
+    const checkQuery = isProduction
+      ? `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = $1 AND "createdAt"::timestamp >= $2 AND "createdAt"::timestamp <= $3`
+      : `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
+
+    db.all(checkQuery, [facultyId, todayStart, todayEnd], (err, sessions) => {
       if (err) return res.status(500).json({ error: err.message });
       
       const enrichedSlots = slots.map(slot => {

@@ -183,6 +183,34 @@ class User {
     this.scopes,
   });
 
+  User copyWith({
+    String? id,
+    String? role,
+    String? name,
+    String? email,
+    String? rollNo,
+    String? profilePictureUrl,
+    String? branch,
+    String? division,
+    String? electiveBatch,
+    String? coreBatch,
+    List<Map<String, dynamic>>? scopes,
+  }) {
+    return User(
+      id: id ?? this.id,
+      role: role ?? this.role,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      rollNo: rollNo ?? this.rollNo,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      branch: branch ?? this.branch,
+      division: division ?? this.division,
+      electiveBatch: electiveBatch ?? this.electiveBatch,
+      coreBatch: coreBatch ?? this.coreBatch,
+      scopes: scopes ?? this.scopes,
+    );
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'],

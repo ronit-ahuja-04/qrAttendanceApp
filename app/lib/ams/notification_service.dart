@@ -39,7 +39,7 @@ class NotificationService {
     
     if (!kIsWeb) {
       const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('@mipmap/launcher_icon');
+          AndroidInitializationSettings('@mipmap/ic_launcher');
 
       const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings();
 
