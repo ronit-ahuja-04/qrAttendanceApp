@@ -140,6 +140,24 @@ db.serialize(() => {
     batchTarget TEXT
   )`);
 
+  // Add missing columns if they don't exist
+  if (isProduction) {
+    const addColumn = (table, col) => {
+      db.run(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT`, (err) => {
+        if (err && !err.message.includes('already exists')) console.warn(`${col} already exists or error:`, err.message);
+      });
+    };
+    addColumn('sessions', 'slotId');
+    addColumn('sessions', 'metadata');
+    addColumn('sessions', 'batchTarget');
+    addColumn('sessions', 'groupId');
+  } else {
+    db.run(`ALTER TABLE sessions ADD COLUMN slotId TEXT`, (err) => {});
+    db.run(`ALTER TABLE sessions ADD COLUMN metadata TEXT`, (err) => {});
+    db.run(`ALTER TABLE sessions ADD COLUMN batchTarget TEXT`, (err) => {});
+    db.run(`ALTER TABLE sessions ADD COLUMN groupId TEXT`, (err) => {});
+  }
+
   db.run(`CREATE TABLE IF NOT EXISTS attendance_records (
     id TEXT PRIMARY KEY,
     sessionId TEXT,
