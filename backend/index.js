@@ -30,8 +30,6 @@ app.use((req, res, next) => {
 
 // Initialize Firebase Admin
 const admin = require('firebase-admin');
-const fs = require('fs');
-
 try {
   let serviceAccount;
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
