@@ -40,7 +40,12 @@ if (isProduction) {
     electivesubject: 'electiveSubject',
     electivebatch: 'electiveBatch',
     fcmtoken: 'fcmToken',
-    notificationprefs: 'notificationPrefs'
+    notificationprefs: 'notificationPrefs',
+    facultyname: 'facultyName',
+    facultyemail: 'facultyEmail',
+    proxyfacultyname: 'proxyFacultyName',
+    studentname: 'studentName',
+    studentrollno: 'studentRollNo'
   };
 
   function fixKeys(row) {
