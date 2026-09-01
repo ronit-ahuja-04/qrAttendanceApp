@@ -16,7 +16,7 @@ const LoginScreen = () => {
     setError('');
 
     try {
-      const response = await api.post('/auth/login', { email, password });
+      const response = await api.post('/login', { email, password });
       const { token, user } = response.data;
       
       if (user.role !== 'faculty' && user.role !== 'admin') {

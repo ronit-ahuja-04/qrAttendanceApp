@@ -15,7 +15,7 @@ const DashboardScreen = () => {
         // According to API routes, faculty can fetch their sessions 
         // using /api/sessions/faculty/:facultyId (active) or generic fetching.
         // Assuming we fetch all sessions for today for this faculty
-        const response = await api.get(`/sessions/faculty/${user.id}`);
+        const response = await api.get(`/api/sessions/faculty/${user.id}`);
         setSessions(response.data.sessions || []);
       } catch (err) {
         console.error(err);

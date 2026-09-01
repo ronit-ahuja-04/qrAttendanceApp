@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://qr-attendance-api-wvvs.onrender.com/api',
+  baseURL: 'https://qr-attendance-api-wvvs.onrender.com',
   headers: {
     'Content-Type': 'application/json',
   },
