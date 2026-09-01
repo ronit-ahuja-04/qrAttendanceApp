@@ -89,15 +89,31 @@ if (isProduction) {
     },
     prepare: function (sql) {
       const convertedSql = this._convertSql(sql);
+      const pendingQueries = [];
       return {
-        run: function (params, callback) {
-          if (typeof params === 'function') { callback = params; params = []; }
-          params = params || [];
-          pool.query(convertedSql, params, (err, res) => {
-            if (callback) callback.call({ changes: res ? res.rowCount : 0 }, err);
+        run: function (...args) {
+          let callback = null;
+          if (args.length > 0 && typeof args[args.length - 1] === 'function') {
+            callback = args.pop();
+          }
+          let params = args;
+          if (args.length === 1 && Array.isArray(args[0])) {
+            params = args[0];
+          }
+          const promise = pool.query(convertedSql, params).then(res => {
+            if (callback) callback.call({ changes: res ? res.rowCount : 0 }, null);
+          }).catch(err => {
+            if (callback) callback.call({ changes: 0 }, err);
+            else console.error('Prepared statement error:', err);
           });
+          pendingQueries.push(promise);
+          return this;
         },
-        finalize: function () {}
+        finalize: function (cb) {
+          Promise.allSettled(pendingQueries).then(() => {
+            if (cb) cb(null);
+          });
+        }
       };
     }
   };
