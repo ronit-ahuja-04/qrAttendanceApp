@@ -31,7 +31,15 @@ app.use((req, res, next) => {
 // Initialize Firebase Admin
 const admin = require('firebase-admin');
 try {
-  const serviceAccount = require('./firebase-service-account.json');
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // If running on Render, parse the JSON from an environment variable
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // Local fallback
+    serviceAccount = require('./firebase-service-account.json');
+  }
+
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
