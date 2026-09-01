@@ -8,8 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:image_picker/image_picker.dart';
 
 String get baseUrl {
-  // Use localhost (now that backend binds to IPv6 as well)
-  return 'http://localhost:3000';
+  return 'https://qr-attendance-api-wvvs.onrender.com';
 }
 
 class ApiSessionService {
@@ -224,6 +223,11 @@ class ApiSessionService {
     } catch (e) {
       print('Error deleting FCM token: $e');
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ams_user_session');
+    } catch (_) {}
+    AmsGlobals.loggedInUser = null;
   }
 
   /// Requests a password reset OTP for [email].

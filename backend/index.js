@@ -448,8 +448,9 @@ app.post('/sessions', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!scope) return res.status(403).json({ error: 'Scope mismatch', message: 'This faculty is not assigned to teach this subject to this batch.' });
 
-    const id = uuidv4();
-    const now = new Date().toISOString();
+    const createSession = () => {
+      const id = uuidv4();
+      const now = new Date().toISOString();
 
     let whereClause = getSessionTargetStudents(courseCode, batchTarget);
 
@@ -515,7 +516,30 @@ app.post('/sessions', (req, res) => {
           }
         );
       }
-    });
+      }
+    }; // end createSession
+
+    if (slotId) {
+      const todayStart = new Date();
+      todayStart.setHours(0,0,0,0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23,59,59,999);
+
+      const checkQuery = isProduction
+        ? `SELECT * FROM sessions WHERE "slotId" = $1 AND "createdAt"::timestamp >= $2 AND "createdAt"::timestamp <= $3 LIMIT 1`
+        : `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
+        
+      db.get(checkQuery, [slotId, todayStart.toISOString(), todayEnd.toISOString()], (err, existingSession) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (existingSession) {
+          // Check if session is completed, active, scheduled
+          return res.json(existingSession);
+        }
+        createSession();
+      });
+    } else {
+      createSession();
+    }
   });
 });
 

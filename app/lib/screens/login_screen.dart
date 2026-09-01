@@ -25,7 +25,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController(text: 'pass123');
+  final _passwordController = TextEditingController();
   String _role = 'student';
   bool _isLoading = false;
 
@@ -74,6 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
       AmsGlobals.loggedInUser = user;
       
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ams_user_session', jsonEncode(user.toJson()));
+      
       final pushEnabled = prefs.getBool('notif_master') ?? true;
       
       if (pushEnabled) {

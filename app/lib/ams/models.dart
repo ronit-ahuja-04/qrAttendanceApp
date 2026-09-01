@@ -198,6 +198,22 @@ class User {
       scopes: json['scopes'] != null ? List<Map<String, dynamic>>.from(json['scopes']) : null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'role': role,
+      'name': name,
+      'email': email,
+      'rollNo': rollNo,
+      'profilePictureUrl': profilePictureUrl,
+      'branch': branch,
+      'division': division,
+      'electiveBatch': electiveBatch,
+      'coreBatch': coreBatch,
+      'scopes': scopes,
+    };
+  }
 }
 
 class Student {

@@ -407,8 +407,8 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   
   late String _day;
   String _subject = '';
-  String _type = '';
-  String _batch = '';
+  String _type = 'Lecture';
+  String _batch = 'Unknown Batch';
   
   final _venueController = TextEditingController();
 
@@ -443,8 +443,8 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   void _initScopes() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
     if (scopes.isNotEmpty) {
-      _subjects = scopes.map((s) => s['subject'] as String).toSet().toList()..sort();
-      _subject = _subjects.isNotEmpty ? _subjects.first : '';
+      _subjects = scopes.map((s) => s['subject']?.toString() ?? 'Unknown Subject').toSet().toList()..sort();
+      _subject = _subjects.isNotEmpty ? _subjects.first : 'Unknown Subject';
       _updateDependentDropdowns();
     }
     if (_subjects.isEmpty) _subjects = ['Unknown Subject'];
@@ -456,7 +456,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
     
     if (subjectScopes.isNotEmpty) {
-      _types = subjectScopes.map((s) => s['type'] as String).toSet().toList()..sort();
+      _types = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet().toList()..sort();
       if (!_types.contains(_type)) _type = _types.isNotEmpty ? _types.first : 'Lecture';
       
       _updateBatchesForType();
@@ -473,7 +473,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
     
     if (validScopes.isNotEmpty) {
-      _batches = validScopes.map((s) => s['batchTarget'] as String).toSet().toList()..sort();
+      _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? 'Unknown Batch').toSet().toList()..sort();
       if (!_batches.contains(_batch)) {
         if (_type.toLowerCase() == 'lecture') {
           // Prefer 'All' for lectures
