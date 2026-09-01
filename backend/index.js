@@ -272,9 +272,7 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
         metadata: { contentType: req.file.mimetype },
       });
       
-      // Make the file public to get a static URL
-      await file.makePublic();
-      url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+      url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
     } catch (e) {
       console.error("Firebase Storage Upload Error:", e);
       return res.status(500).json({ error: "Cloud storage upload failed." });
