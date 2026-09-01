@@ -30,20 +30,24 @@ app.use((req, res, next) => {
 
 // Initialize Firebase Admin
 const admin = require('firebase-admin');
+const fs = require('fs');
+
 try {
   let serviceAccount;
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    // If running on Render, parse the JSON from an environment variable
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } else {
-    // Local fallback
+  } else if (fs.existsSync('./firebase-service-account.json')) {
     serviceAccount = require('./firebase-service-account.json');
   }
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-  console.log('Firebase Admin SDK initialized successfully.');
+  if (serviceAccount) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('Firebase Admin SDK initialized successfully.');
+  } else {
+    console.warn('Firebase Admin SDK NOT initialized. Missing credentials.');
+  }
 } catch (e) {
   console.error('Failed to initialize Firebase Admin SDK:', e.message);
 }
