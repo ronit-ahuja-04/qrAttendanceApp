@@ -10,6 +10,48 @@ if (isProduction) {
     ssl: { rejectUnauthorized: false }
   });
 
+  const keyMap = {
+    facultyid: 'facultyId',
+    batchtarget: 'batchTarget',
+    starttime: 'startTime',
+    endtime: 'endTime',
+    coursecode: 'courseCode',
+    qrcode: 'qrCode',
+    qrissuedat: 'qrIssuedAt',
+    qrexpiresat: 'qrExpiresAt',
+    enrolledstudentids: 'enrolledStudentIds',
+    createdat: 'createdAt',
+    previousqrcode: 'previousQrCode',
+    proxyfacultyid: 'proxyFacultyId',
+    approvalstatus: 'approvalStatus',
+    groupid: 'groupId',
+    sessionid: 'sessionId',
+    studentid: 'studentId',
+    markedat: 'markedAt',
+    userid: 'userId',
+    tagcolor: 'tagColor',
+    ontagcolor: 'onTagColor',
+    byname: 'byName',
+    byicon: 'byIcon',
+    isread: 'isRead',
+    rollno: 'rollNo',
+    profilepictureurl: 'profilePictureUrl',
+    corebatch: 'coreBatch',
+    electivesubject: 'electiveSubject',
+    electivebatch: 'electiveBatch',
+    fcmtoken: 'fcmToken',
+    notificationprefs: 'notificationPrefs'
+  };
+
+  function fixKeys(row) {
+    if (!row) return row;
+    const newRow = {};
+    for (const key in row) {
+      newRow[keyMap[key] || key] = row[key];
+    }
+    return newRow;
+  }
+
   db = {
     serialize: (cb) => cb(),
     _convertSql: (sql) => {
@@ -28,7 +70,7 @@ if (isProduction) {
       if (typeof params === 'function') { callback = params; params = []; }
       params = params || [];
       pool.query(this._convertSql(sql), params, (err, res) => {
-        if (callback) callback(err, res && res.rows ? res.rows[0] : null);
+        if (callback) callback(err, res && res.rows && res.rows.length > 0 ? fixKeys(res.rows[0]) : null);
       });
       return this;
     },
@@ -36,7 +78,7 @@ if (isProduction) {
       if (typeof params === 'function') { callback = params; params = []; }
       params = params || [];
       pool.query(this._convertSql(sql), params, (err, res) => {
-        if (callback) callback(err, res ? res.rows : []);
+        if (callback) callback(err, res && res.rows ? res.rows.map(fixKeys) : []);
       });
       return this;
     },

@@ -40,7 +40,8 @@ try {
 
   if (serviceAccount) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: 'attendance-monitoring-sy-89218.firebasestorage.app'
     });
     console.log('Firebase Admin SDK initialized successfully.');
   } else {
