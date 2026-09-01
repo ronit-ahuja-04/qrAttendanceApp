@@ -180,7 +180,9 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer config
-const storage = multer.diskStorage({
+const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
+
+const storage = isProduction ? multer.memoryStorage() : multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -242,13 +244,34 @@ app.post('/login', (req, res) => {
   });
 });
 
-app.post('/users/:id/profile-picture', upload.single('profilePicture'), (req, res) => {
+app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided or invalid format.' });
 
   const userId = req.params.id;
-  // Construct absolute URL (assuming running on localhost:3000 for development)
-  // In a real app, this should dynamically use the server's host or be a relative path resolved by frontend
-  const url = `http://localhost:3000/uploads/${req.file.filename}`;
+  let url;
+
+  if (isProduction) {
+    try {
+      const bucket = admin.storage().bucket();
+      const ext = path.extname(req.file.originalname);
+      const filename = `profiles/${uuidv4()}${ext}`;
+      const file = bucket.file(filename);
+      
+      await file.save(req.file.buffer, {
+        metadata: { contentType: req.file.mimetype },
+      });
+      
+      // Make the file public to get a static URL
+      await file.makePublic();
+      url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    } catch (e) {
+      console.error("Firebase Storage Upload Error:", e);
+      return res.status(500).json({ error: "Cloud storage upload failed." });
+    }
+  } else {
+    // Construct absolute URL for local dev
+    url = `http://localhost:3000/uploads/${req.file.filename}`;
+  }
 
   db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
