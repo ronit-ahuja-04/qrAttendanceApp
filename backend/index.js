@@ -728,25 +728,14 @@ app.post('/api/attendance/mark', (req, res) => {
     let anyError = null;
 
     // We can insert records for all matched sessions
-    const checkCompletion = () => {
-      if (insertCount + duplicateCount === matchedSessions.length) {
-        if (insertCount === 0 && duplicateCount > 0) {
-           return res.status(400).json({ error: 'duplicateAttendance', message: 'Attendance already marked.' });
-        }
-        res.json({
-          success: true,
-          message: 'Attendance marked successfully.'
-        });
-      }
-    };
-
     matchedSessions.forEach(session => {
       const aid = uuidv4();
       db.run('INSERT INTO attendance_records (id, sessionId, studentId, markedAt, status, method) VALUES (?, ?, ?, ?, ?, ?)',
         [aid, session.id, studentId, markedAt, 'pending', 'qr'],
         function (err) {
           if (err) {
-            if (err.message.includes('UNIQUE')) {
+            // Support both SQLite ('UNIQUE') and Postgres ('duplicate key' or 'unique') error formats
+            if (err.message.includes('UNIQUE') || err.message.toLowerCase().includes('unique') || err.message.toLowerCase().includes('duplicate key')) {
               duplicateCount++;
             } else {
               anyError = err;
@@ -757,7 +746,24 @@ app.post('/api/attendance/mark', (req, res) => {
           if (anyError && insertCount + duplicateCount === matchedSessions.length) {
              return res.status(500).json({ error: anyError.message });
           }
-          checkCompletion();
+          
+          if (insertCount + duplicateCount === matchedSessions.length) {
+            if (insertCount === 0 && duplicateCount > 0) {
+               return res.status(400).json({ error: 'duplicateAttendance', message: 'Attendance already marked.' });
+            }
+            res.json({
+              success: true,
+              message: 'Attendance marked successfully.',
+              record: {
+                id: aid,
+                sessionId: session.id,
+                studentId: studentId,
+                markedAt: markedAt,
+                status: 'pending',
+                method: 'qr'
+              }
+            });
+          }
         }
       );
     });
