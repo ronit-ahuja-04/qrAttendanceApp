@@ -7,7 +7,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/vesit_widgets.dart';
 import 'faculty_attendance_qr_generator_screen.dart';
 import '../ams/globals.dart';
-import '../ams/api_services.dart' show baseUrl;
+import '../ams/api_services.dart' show baseUrl, httpClient;
 import '../widgets/vesit_toast.dart';
 
 class GlobalConfigureSessionScreen extends StatefulWidget {
@@ -101,8 +101,8 @@ class _GlobalConfigureSessionScreenState
 
   Future<void> _fetchAllSlots() async {
     try {
-      final res = await http.get(Uri.parse('$baseUrl/timetable'));
-      final activeRes = await http.get(Uri.parse('$baseUrl/api/sessions/today/all'));
+      final res = await httpClient.get(Uri.parse('$baseUrl/timetable'));
+      final activeRes = await httpClient.get(Uri.parse('$baseUrl/api/sessions/today/all'));
       
       if (res.statusCode == 200) {
         final List<dynamic> data = jsonDecode(res.body);

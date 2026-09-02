@@ -137,7 +137,7 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
     }).toList();
 
     try {
-      final response = await http.post(
+      final response = await httpClient.post(
         Uri.parse('$baseUrl/api/sessions/${widget.sessionId}/attendance/finalize'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'updates': updates}),

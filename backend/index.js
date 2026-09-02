@@ -36,6 +36,11 @@ app.use((req, res, next) => {
 
 // Global authentication middleware
 app.use((req, res, next) => {
+  // Allow CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const publicPaths = [
     '/login',
     '/forgot-password',

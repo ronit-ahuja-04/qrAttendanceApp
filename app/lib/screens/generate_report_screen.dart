@@ -212,7 +212,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         }
       } else {
         // Mobile/Desktop logic
-        final response = await http.get(Uri.parse(url));
+        final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
           final filename = 'Report_${widget.session.courseCode}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
