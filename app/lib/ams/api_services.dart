@@ -2,6 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'models.dart';
+import 'notification_service.dart';
+import 'globals.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:image_picker/image_picker.dart';
+
 
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner = http.Client();
@@ -24,11 +30,6 @@ class AuthenticatedClient extends http.BaseClient {
 
 final httpClient = AuthenticatedClient();
 
-import 'models.dart';
-import 'notification_service.dart';
-import 'globals.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
-import 'package:image_picker/image_picker.dart';
 
 String get baseUrl {
   return 'https://qr-attendance-api-wvvs.onrender.com';
@@ -531,7 +532,7 @@ class ApiAttendanceService {
       return Result.failure(_parseReason(err['error']), err['message'] ?? 'Error');
     } catch (e) {
       print('MARK ATTENDANCE ERROR: $e');
-      return Result.failure(null, 'Failed to connect to server: $e');
+      return Result.failure(RejectionReason.sessionNotFound, 'Failed to connect to server: $e');
     }
   }
 

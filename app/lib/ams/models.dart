@@ -218,7 +218,7 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     String? pfp = json['profilePictureUrl'];
     if (pfp != null && pfp.startsWith('/')) {
-      pfp = '$baseUrl$pfp';
+      pfp = 'https://qr-attendance-api-wvvs.onrender.com$pfp';
     }
     return User(
       id: json['id'],

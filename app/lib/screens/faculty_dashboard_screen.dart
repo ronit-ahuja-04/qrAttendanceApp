@@ -312,6 +312,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                   ),
                 ],
               ),
+             ),
             );
           },
         ),

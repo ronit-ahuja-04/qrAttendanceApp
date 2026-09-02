@@ -402,6 +402,7 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
+            ),
           ),
           const SizedBox(width: 12),
           GestureDetector(
