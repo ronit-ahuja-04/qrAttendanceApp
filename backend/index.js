@@ -307,8 +307,16 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
       return res.status(500).json({ error: "Cloud storage upload failed." });
     }
   } else {
-    // Return relative URL for local dev so client can prepend baseUrl
-    url = `/uploads/${req.file.filename}`;
+    // Fallback: Write buffer to disk if memory storage was used
+    if (!req.file.filename && req.file.buffer) {
+      const ext = require('path').extname(req.file.originalname);
+      const filename = require('crypto').randomUUID() + ext;
+      if (!require('fs').existsSync('uploads')) require('fs').mkdirSync('uploads');
+      require('fs').writeFileSync('uploads/' + filename, req.file.buffer);
+      url = `/uploads/${filename}`;
+    } else {
+      url = `/uploads/${req.file.filename}`;
+    }
   }
 
   db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
