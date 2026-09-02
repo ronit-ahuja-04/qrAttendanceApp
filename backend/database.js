@@ -12,6 +12,9 @@ if (isProduction) {
 
   const keyMap = {
     facultyid: 'facultyId',
+    timetableslotid: 'timetableSlotId',
+    facultyname: 'facultyName',
+    facultyemail: 'facultyEmail',
     batchtarget: 'batchTarget',
     starttime: 'startTime',
     endtime: 'endTime',

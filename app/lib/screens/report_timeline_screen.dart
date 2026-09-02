@@ -77,7 +77,15 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
       final subject = Uri.encodeComponent(widget.subject);
       final batchTarget = Uri.encodeComponent(widget.batchTarget);
       
-      final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end';
+      final prefs = await SharedPreferences.getInstance();
+      final sessionJson = prefs.getString('ams_user_session');
+      String token = '';
+      if (sessionJson != null) {
+        try {
+          token = jsonDecode(sessionJson)['token'] ?? '';
+        } catch(e) {}
+      }
+      final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end&token=$token';
       
       if (kIsWeb) {
         // Web download logic

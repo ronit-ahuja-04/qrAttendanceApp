@@ -196,7 +196,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _exportToLockedExcel() async {
     try {
-      final url = '$baseUrl/api/report/excel/${widget.session.id}';
+      final prefs = await SharedPreferences.getInstance();
+      final sessionJson = prefs.getString('ams_user_session');
+      String token = '';
+      if (sessionJson != null) {
+        try {
+          token = jsonDecode(sessionJson)['token'] ?? '';
+        } catch(e) {}
+      }
+      final url = '$baseUrl/api/report/excel/${widget.session.id}?token=$token';
       
       if (kIsWeb) {
         // Web download logic
