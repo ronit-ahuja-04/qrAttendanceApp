@@ -89,22 +89,31 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
       }
       final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end&token=$token';
       
+      
       if (kIsWeb) {
-        // Web download logic
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", 'BulkReport_${widget.subject}.xlsx')
-          ..target = '_blank'
-          ..click();
+        // Web download logic with Blob to hide token
+        final response = await httpClient.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: blobUrl)
+            ..setAttribute("download", 'BulkReport_${widget.subject}.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
           
-        if (mounted) {
-          VesitToast.show(
-            context: context,
-            title: 'Success',
-            description: 'Report downloaded successfully',
-            type: ToastType.success,
-          );
+          if (mounted) {
+            VesitToast.show(
+              context: context,
+              title: 'Success',
+              description: 'Report downloaded successfully',
+              type: ToastType.success,
+            );
+          }
+        } else {
+          throw Exception('Failed to download from server');
         }
       } else {
+
         // Mobile/Desktop logic
         final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {

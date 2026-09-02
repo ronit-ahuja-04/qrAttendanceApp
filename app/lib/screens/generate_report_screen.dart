@@ -208,19 +208,28 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       }
       final url = '$baseUrl/api/report/excel/${widget.session.id}?token=$token';
       
+      
       if (kIsWeb) {
-        // Web download logic
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", 'Report_${widget.session.courseCode}.xlsx')
-          ..target = '_blank'
-          ..click();
+        // Web download logic with Blob to hide token
+        final response = await httpClient.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: blobUrl)
+            ..setAttribute("download", 'Report_${widget.session.courseCode}.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
           
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Report downloaded successfully')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Report downloaded successfully')),
+            );
+          }
+        } else {
+          throw Exception('Failed to download from server');
         }
       } else {
+
         // Mobile/Desktop logic
         final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {
