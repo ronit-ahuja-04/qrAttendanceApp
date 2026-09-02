@@ -217,8 +217,12 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     String? pfp = json['profilePictureUrl'];
-    if (pfp != null && pfp.startsWith('/')) {
-      pfp = 'https://qr-attendance-api-wvvs.onrender.com$pfp';
+    if (pfp != null) {
+      if (pfp.startsWith('/')) {
+        pfp = 'https://qr-attendance-api-wvvs.onrender.com$pfp';
+      } else if (pfp.contains('localhost:3000')) {
+        pfp = pfp.replaceAll('http://localhost:3000', 'https://qr-attendance-api-wvvs.onrender.com');
+      }
     }
     return User(
       id: json['id'],
