@@ -1494,24 +1494,35 @@ function calculateEndTime(startTime, type) {
   return `${h.toString().padStart(2, '0')}:${m}`;
 }
 
+
+function parseTimeStr(tStr) {
+  if (!tStr) return 0;
+  const parts = tStr.trim().split(' ');
+  const hm = parts[0].split(':').map(Number);
+  let hr = hm[0] || 0;
+  const min = hm[1] || 0;
+  if (parts.length > 1) {
+    const ampm = parts[1].toUpperCase();
+    if (ampm === 'PM' && hr < 12) hr += 12;
+    if (ampm === 'AM' && hr === 12) hr = 0;
+  }
+  return hr * 60 + min;
+}
+
 function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, excludeId, callback) {
   db.all('SELECT ts.*, u.name as facultyName FROM timetable_slots ts JOIN users u ON ts.facultyId = u.id WHERE ts.day = ?', [day], (err, slots) => {
     if (err) return callback(err, null);
     
-    const [nH, nM] = startTime.split(':').map(Number);
-    const [neH, neM] = endTime.split(':').map(Number);
-    const newStart = nH * 60 + nM;
-    const newEnd = neH * 60 + neM;
+    const newStart = parseTimeStr(startTime);
+    const newEnd = parseTimeStr(endTime);
 
     for (const slot of slots) {
       if (excludeId && slot.id === excludeId) continue;
       
       const st = slot.startTime || '00:00';
       const et = slot.endTime || '00:00';
-      const [sH, sM] = st.split(':').map(Number);
-      const [eH, eM] = et.split(':').map(Number);
-      const slotStart = sH * 60 + sM;
-      const slotEnd = eH * 60 + eM;
+      const slotStart = parseTimeStr(st);
+      const slotEnd = parseTimeStr(et);
       
       const overlaps = Math.max(newStart, slotStart) < Math.min(newEnd, slotEnd);
       
