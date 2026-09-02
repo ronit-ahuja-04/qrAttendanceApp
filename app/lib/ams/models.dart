@@ -161,6 +161,7 @@ class User {
   final String? electiveBatch;
   final String? coreBatch;
   final List<Map<String, dynamic>>? scopes;
+  final String? token;
 
   String get formattedName {
     if (role == 'faculty') {
@@ -181,6 +182,7 @@ class User {
     this.electiveBatch,
     this.coreBatch,
     this.scopes,
+    this.token,
   });
 
   User copyWith({
@@ -195,6 +197,7 @@ class User {
     String? electiveBatch,
     String? coreBatch,
     List<Map<String, dynamic>>? scopes,
+    String? token,
   }) {
     return User(
       id: id ?? this.id,
@@ -208,22 +211,28 @@ class User {
       electiveBatch: electiveBatch ?? this.electiveBatch,
       coreBatch: coreBatch ?? this.coreBatch,
       scopes: scopes ?? this.scopes,
+      token: token ?? this.token,
     );
   }
 
   factory User.fromJson(Map<String, dynamic> json) {
+    String? pfp = json['profilePictureUrl'];
+    if (pfp != null && pfp.startsWith('/')) {
+      pfp = '$baseUrl$pfp';
+    }
     return User(
       id: json['id'],
       role: json['role'],
       name: json['name'],
       email: json['email'] ?? '',
       rollNo: json['rollNo'],
-      profilePictureUrl: json['profilePictureUrl'],
+      profilePictureUrl: pfp,
       branch: json['branch'],
       division: json['division'],
       electiveBatch: json['electiveBatch'],
       coreBatch: json['coreBatch'],
       scopes: json['scopes'] != null ? List<Map<String, dynamic>>.from(json['scopes']) : null,
+      token: json['token'],
     );
   }
 
@@ -240,6 +249,7 @@ class User {
       'electiveBatch': electiveBatch,
       'coreBatch': coreBatch,
       'scopes': scopes,
+      'token': token,
     };
   }
 }

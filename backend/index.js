@@ -18,7 +18,13 @@ const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
 const exceljs = require('exceljs');
+const helmet = require('helmet');
+const { authenticateToken, generateToken } = require('./middleware/auth');
+const { apiLimiter, loginLimiter } = require('./middleware/rateLimiter');
 const app = express();
+
+app.use(helmet());
+app.use(apiLimiter);
 app.use(cors());
 app.use(express.json());
 
@@ -26,6 +32,22 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
+});
+
+// Global authentication middleware
+app.use((req, res, next) => {
+  const publicPaths = [
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/uploads'
+  ];
+  
+  if (publicPaths.some(p => req.path.startsWith(p))) {
+    return next();
+  }
+  
+  return authenticateToken(req, res, next);
 });
 
 // Initialize Firebase Admin
@@ -230,7 +252,7 @@ function generateQrCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-app.post('/login', (req, res) => {
+app.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
   console.log('Login attempt:', email, password);
   db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
@@ -247,9 +269,11 @@ app.post('/login', (req, res) => {
         } else {
           row.scopes = scopes;
         }
+        row.token = generateToken(row);
         res.json(row);
       });
     } else {
+      row.token = generateToken(row);
       res.json(row);
     }
   });
@@ -278,8 +302,8 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
       return res.status(500).json({ error: "Cloud storage upload failed." });
     }
   } else {
-    // Construct absolute URL for local dev
-    url = `http://localhost:3000/uploads/${req.file.filename}`;
+    // Return relative URL for local dev so client can prepend baseUrl
+    url = `/uploads/${req.file.filename}`;
   }
 
   db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
@@ -303,6 +327,19 @@ app.get('/notifications/stream', (req, res) => {
   });
 });
 
+// Global Authentication Middleware
+app.use((req, res, next) => {
+  const publicPaths = [
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/change-password'
+  ];
+  if (publicPaths.includes(req.path) || req.path.startsWith('/users/') || req.path.startsWith('/notifications/stream')) {
+    return next();
+  }
+  return authenticateToken(req, res, next);
+});
 
 function getSessionTargetStudents(courseCode, batchTarget) {
   let whereClause = "role = 'student'";
@@ -516,8 +553,8 @@ app.post('/sessions', (req, res) => {
           }
         );
       }
-      }
-    }; // end createSession
+    }); // end db.all
+  }; // end createSession
 
     if (slotId) {
       const todayStart = new Date();
@@ -723,8 +760,9 @@ app.get('/api/sessions/today/all', (req, res) => {
 
 
 // 9) Mark Attendance
-app.post('/api/attendance/mark', (req, res) => {
-  const { sessionId, studentId, code } = req.body;
+app.post('/api/attendance/mark', authenticateToken, (req, res) => {
+  const { sessionId, code } = req.body;
+  const studentId = req.user.id; // SECURE: Extracted from verified JWT, cannot be spoofed!
 
   db.all('SELECT * FROM sessions WHERE id = ? OR groupId = ?', [sessionId, sessionId], (err, sessions) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -860,6 +898,14 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
                sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
            });
         }
+        
+        // Notify the faculty who actually submitted the attendance
+        const submitterId = session.proxyFacultyId || session.facultyId;
+        const submitterTitle = 'Attendance Submitted';
+        const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
+        db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
+        sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
 
         res.json({ success: true, message: 'Attendance finalized successfully.' });
       });
@@ -1706,9 +1752,12 @@ app.get('/api/attendance/student/:studentId/stats', (req, res) => {
   });
 });
 
-app.listen(3000, () => {
-  console.log('Backend listening on port 3000');
-});
+if (require.main === module) {
+  app.listen(3000, () => {
+    console.log('Server running on port 3000');
+  });
+}
+module.exports = app;
 
 function handleSmartSeminarAttendance(req, res, session, userId, method) {
   const meta = JSON.parse(session.metadata || '{}');

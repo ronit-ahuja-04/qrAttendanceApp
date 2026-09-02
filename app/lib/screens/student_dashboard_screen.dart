@@ -24,6 +24,7 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
+  bool _isNavigating = false;
   double _overallPercentage = 0.0;
   List<dynamic> _subjectsStats = [];
   List<Map<String, dynamic>> _rawSessions = [];
@@ -187,6 +188,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   .push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               onAvatarTap: widget.onProfileTap ?? () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const StudentProfileScreen())),
+              onRefreshTap: () {
+                setState(() => _isLoading = true);
+                _fetchData();
+              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -194,6 +199,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 color: context.colors.vesitPrimary,
                 child: ListView(
                   controller: widget.scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 130),
                   children: [
                     _StaggeredFade(
@@ -220,8 +226,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                               title: 'Mark\nAttendance',
                               icon: Icons.qr_code_scanner_rounded,
                               highlighted: true,
-                              onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const QrScannerScreen())),
+                              onTap: () async {
+                                if (_isNavigating) return;
+                                _isNavigating = true;
+                                await Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const QrScannerScreen()));
+                                _isNavigating = false;
+                              },
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -295,12 +306,14 @@ class _Header extends StatelessWidget {
     required this.studentName,
     required this.onNotificationsTap,
     required this.onAvatarTap,
+    required this.onRefreshTap,
   });
 
   final DateTime now;
   final String studentName;
   final VoidCallback onNotificationsTap;
   final VoidCallback onAvatarTap;
+  final VoidCallback onRefreshTap;
 
   String _getGreeting() {
     final h = now.hour;
@@ -389,6 +402,18 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: onRefreshTap,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: context.colors.outlineVariant, width: 1.5),
+              ),
+              child: Icon(Icons.refresh,
+                  color: context.colors.onSurface, size: 22),
             ),
           ),
           const SizedBox(width: 12),

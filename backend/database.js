@@ -119,6 +119,10 @@ if (isProduction) {
   };
   
   console.log("Using PostgreSQL Database wrapper.");
+} else if (process.env.NODE_ENV === 'test') {
+  const sqlite3 = require('sqlite3').verbose();
+  db = new sqlite3.Database(':memory:');
+  console.log("Using SQLite In-Memory Database for testing.");
 } else {
   const sqlite3 = require('sqlite3').verbose();
   db = new sqlite3.Database('./database.sqlite');

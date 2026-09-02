@@ -237,9 +237,13 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
             }
 
             // Mobile Layout (Single Column)
-            return SingleChildScrollView(
-              controller: widget.scrollController,
-              child: Column(
+            return RefreshIndicator(
+              onRefresh: _loadTimetable,
+              color: context.colors.vesitPrimary,
+              child: SingleChildScrollView(
+                controller: widget.scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
                 children: [
                   Container(
                     color: context.colors.vesitWhite,
@@ -896,9 +900,29 @@ class _UpcomingSessionsList extends StatelessWidget {
                           // The proxy hasn't submitted yet. Let the original faculty override it.
                           continue;
                         }
-                        sessionExistsToday = true;
-                        existingSession = s;
-                        break;
+                        
+                        // Check if session was created on the matching day
+                        final sessionDate = s.createdAt;
+                        bool isYesterdaySlot = false;
+                        final sDay = session['day'] as String?;
+                        if (sDay != null) {
+                          final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                          final todayIndex = now.weekday - 1;
+                          final idx = dayNamesList.indexOf(sDay);
+                          if (idx >= 0) {
+                            if (todayIndex == 0 && idx == 6) isYesterdaySlot = true;
+                            else if (idx == todayIndex - 1) isYesterdaySlot = true;
+                          }
+                        }
+                        final targetDate = isYesterdaySlot ? now.subtract(const Duration(days: 1)) : now;
+                        
+                        if (sessionDate.year == targetDate.year && 
+                            sessionDate.month == targetDate.month && 
+                            sessionDate.day == targetDate.day) {
+                          sessionExistsToday = true;
+                          existingSession = s;
+                          break;
+                        }
                       }
                     }
 
