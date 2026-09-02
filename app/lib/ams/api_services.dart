@@ -319,7 +319,8 @@ class ApiSessionService {
         ));
       }
 
-      final streamedResponse = await request.send();
+      // Use httpClient to ensure Authorization headers are added
+      final streamedResponse = await httpClient.send(request);
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
