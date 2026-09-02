@@ -354,7 +354,8 @@ app.use((req, res, next) => {
     '/login',
     '/forgot-password',
     '/reset-password',
-    '/change-password'
+    '/change-password',
+    '/timetable'
   ];
   if (publicPaths.includes(req.path) || req.path.startsWith('/users/') || req.path.startsWith('/notifications/stream')) {
     return next();
@@ -1505,8 +1506,10 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
     for (const slot of slots) {
       if (excludeId && slot.id === excludeId) continue;
       
-      const [sH, sM] = slot.startTime.split(':').map(Number);
-      const [eH, eM] = slot.endTime.split(':').map(Number);
+      const st = slot.startTime || '00:00';
+      const et = slot.endTime || '00:00';
+      const [sH, sM] = st.split(':').map(Number);
+      const [eH, eM] = et.split(':').map(Number);
       const slotStart = sH * 60 + sM;
       const slotEnd = eH * 60 + eM;
       
@@ -1514,11 +1517,13 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
       
       if (overlaps) {
         if (slot.facultyId === facultyId) {
-           return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${slot.startTime} (Venue: ${slot.venue}).`);
+           return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${st} (Venue: ${slot.venue}).`);
         }
         
-        const parts1 = batchTarget.split(' - ');
-        const parts2 = slot.batchTarget.split(' - ');
+        const bTarget = batchTarget || '';
+        const sBatchTarget = slot.batchTarget || '';
+        const parts1 = bTarget.split(' - ');
+        const parts2 = sBatchTarget.split(' - ');
         if (parts1.length === 2 && parts2.length === 2) {
           const div1 = parts1[0]; const sub1 = parts1[1];
           const div2 = parts2[0]; const sub2 = parts2[1];
