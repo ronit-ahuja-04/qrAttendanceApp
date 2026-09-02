@@ -1022,7 +1022,7 @@ app.get('/api/report/excel/:id', (req, res) => {
         });
 
         // 3. Fetch Student details (Ordered by rollNo ascending numerically)
-        db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, enrolledIds, async (err, students) => {
+        db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY rollNo ASC`, enrolledIds, async (err, students) => {
           if (err) return res.status(500).json({ error: err.message });
 
           const workbook = new exceljs.Workbook();
@@ -1122,7 +1122,7 @@ app.get('/api/report/bulk-excel', (req, res) => {
     const placeholders = studentIdsArr.map(() => '?').join(',');
 
     // 3. Fetch student details (Ordered by rollNo ascending numerically)
-    db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, studentIdsArr, (err, students) => {
+    db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY rollNo ASC`, studentIdsArr, (err, students) => {
       if (err) return res.status(500).json({ error: err.message });
 
       // 4. Fetch all attendance records for these sessions
