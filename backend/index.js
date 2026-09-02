@@ -183,7 +183,7 @@ cron.schedule('* * * * *', () => {
       sendPushNotification(slot.facultyId, facultyTitle, facultyBody, { type: 'TIMETABLE_UPDATED' }); // using TIMETABLE_UPDATED type to respect 'notif_alerts'
 
       // 2. Notify Students
-      db.all('SELECT id, division, coreBatch, electiveBatch FROM users WHERE role = "student"', [], (err, students) => {
+      db.all('SELECT id, division, coreBatch, electiveBatch FROM users WHERE role = \'student\'', [], (err, students) => {
         if (err || !students) return;
         
         const targetStudents = students.filter(s => {
@@ -568,7 +568,7 @@ app.post('/sessions', (req, res) => {
       todayEnd.setHours(23,59,59,999);
 
       const checkQuery = isProduction
-        ? `SELECT * FROM sessions WHERE "slotId" = $1 AND "createdAt"::timestamp >= $2 AND "createdAt"::timestamp <= $3 LIMIT 1`
+        ? `SELECT * FROM sessions WHERE slotId = $1 AND createdAt >= $2 AND createdAt <= $3 LIMIT 1`
         : `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
         
       db.get(checkQuery, [slotId, todayStart.toISOString(), todayEnd.toISOString()], (err, existingSession) => {
@@ -1424,7 +1424,7 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget) {
     if (err || !faculty) return;
     const facultyName = faculty.name;
 
-    db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role="student"', [], (err, students) => {
+    db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role=\'student\'', [], (err, students) => {
       if (err) return;
       students.forEach(student => {
         const { id: studentId, division, coreBatch, electiveSubject, electiveBatch } = student;
@@ -1602,7 +1602,7 @@ app.get('/timetable/:facultyId', (req, res) => {
 
     // Fetch today's sessions for this faculty to prevent duplicate QR generation
     const checkQuery = isProduction
-      ? `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = $1 AND "createdAt"::timestamp >= $2 AND "createdAt"::timestamp <= $3`
+      ? `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = $1 AND createdAt >= $2 AND createdAt <= $3`
       : `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
 
     db.all(checkQuery, [facultyId, todayStart, todayEnd], (err, sessions) => {
