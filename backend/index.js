@@ -284,6 +284,14 @@ app.post('/login', loginLimiter, (req, res) => {
   });
 });
 
+app.delete('/users/:id/profile-picture', async (req, res) => {
+  const userId = req.params.id;
+  db.run(`UPDATE users SET profilePictureUrl = NULL WHERE id = ?`, [userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: "Profile picture removed successfully", profilePictureUrl: null });
+  });
+});
+
 app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided or invalid format.' });
 

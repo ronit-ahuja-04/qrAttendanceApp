@@ -299,6 +299,29 @@ class ApiSessionService {
     }
   }
 
+
+  Future<User?> removeProfilePicture(String userId) async {
+    try {
+      final response = await httpClient.delete(
+        Uri.parse('$baseUrl/users/$userId/profile-picture'),
+      );
+      if (response.statusCode == 200) {
+        if (AmsGlobals.loggedInUser != null) {
+          AmsGlobals.loggedInUser = AmsGlobals.loggedInUser!.copyWith(
+            profilePictureUrl: '',
+          );
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('ams_user_session', jsonEncode(AmsGlobals.loggedInUser!.toJson()));
+        }
+        return AmsGlobals.loggedInUser;
+      }
+      return null;
+    } catch (e) {
+      print('Error removing profile picture: $e');
+      return null;
+    }
+  }
+
   Future<User?> uploadProfilePicture(String userId, XFile file) async {
     try {
       final request = http.MultipartRequest(
