@@ -290,7 +290,7 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
   const userId = req.params.id;
   let url;
 
-  if (isProduction) {
+  if (isProduction && admin.apps.length > 0) {
     try {
       const bucket = admin.storage().bucket();
       const ext = path.extname(req.file.originalname);
