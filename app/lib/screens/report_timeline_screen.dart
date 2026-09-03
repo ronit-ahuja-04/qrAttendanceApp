@@ -121,7 +121,7 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
                }
             }
           } catch (_) {}
-          throw Exception(errorMsg);
+          throw errorMsg;
         }
       } else {
         // Mobile/Desktop logic
@@ -145,7 +145,7 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
           OpenFile.open(path);
         } else {
           final msg = response.body;
-          throw Exception(msg.isNotEmpty ? msg : 'Failed to download from server');
+          throw msg.isNotEmpty ? msg : 'Failed to download from server';
         }
       }
     } catch (e) {
