@@ -1673,6 +1673,14 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
   });
 }
 
+// GET all timetable slots (used by Timetable Manager)
+app.get('/api/timetable', (req, res) => {
+  db.all('SELECT * FROM timetable_slots', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // POST new timetable slot
 app.post('/api/timetable', (req, res) => {
   const { facultyId, day, subject, type, batchTarget, venue, startTime } = req.body;
