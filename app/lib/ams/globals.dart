@@ -1,4 +1,4 @@
-wimport 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import 'models.dart';
@@ -20,6 +20,22 @@ class AmsGlobals {
   /// Global caching for student dashboard
   static List<Map<String, dynamic>> studentTimetableSlots = [];
   static Map<String, dynamic>? studentStats;
+
+  /// Helper for loading dialogs
+  static Future<void> runWithLoading(BuildContext context, Future<void> Function() action) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await action();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
 
   /// Global notifier for ThemeMode (Light/Dark)
   static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);

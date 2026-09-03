@@ -119,18 +119,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     }
   }
 
-  Future<void> _runWithLoading(Future<void> Function() action) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Center(child: CircularProgressIndicator(color: context.colors.vesitPrimary)),
-    );
-    try {
-      await action();
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1422,16 +1411,16 @@ class _RecentSessionsList extends StatelessWidget {
                 : (session.status == SessionStatus.active ? 'Force Close' : 'View Report'),
             onAction: isPendingProxy
                 ? () async {
-                    await _runWithLoading(() async {
+                    await AmsGlobals.runWithLoading(context, () async {
                       await AmsGlobals.sessionService.approveProxySession(session.id);
-                      await _loadTimetable();
+                      onRefresh();
                     });
                   }
                 : () async {
                     if (session.status == SessionStatus.active) {
-                      await _runWithLoading(() async {
+                      await AmsGlobals.runWithLoading(context, () async {
                         await AmsGlobals.sessionService.closeSession(session.id);
-                        await _loadTimetable();
+                        onRefresh();
                       });
                     } else {
                       Navigator.of(context).push(MaterialPageRoute(
@@ -1440,9 +1429,9 @@ class _RecentSessionsList extends StatelessWidget {
                   },
             onReject: isPendingProxy
                 ? () async {
-                    await _runWithLoading(() async {
+                    await AmsGlobals.runWithLoading(context, () async {
                       await AmsGlobals.sessionService.rejectProxySession(session.id);
-                      await _loadTimetable();
+                      onRefresh();
                     });
                   }
                 : null,
