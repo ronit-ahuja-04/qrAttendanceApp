@@ -315,13 +315,10 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
       return res.status(500).json({ error: "Cloud storage upload failed." });
     }
   } else {
-    // Fallback: Write buffer to disk if memory storage was used
+    // Fallback: Use Base64 if memory storage was used to avoid ephemeral disk loss on Render
     if (!req.file.filename && req.file.buffer) {
-      const ext = require('path').extname(req.file.originalname);
-      const filename = require('crypto').randomUUID() + ext;
-      if (!require('fs').existsSync('uploads')) require('fs').mkdirSync('uploads');
-      require('fs').writeFileSync('uploads/' + filename, req.file.buffer);
-      url = `/uploads/${filename}`;
+      const base64Data = req.file.buffer.toString('base64');
+      url = `data:${req.file.mimetype};base64,${base64Data}`;
     } else {
       url = `/uploads/${req.file.filename}`;
     }

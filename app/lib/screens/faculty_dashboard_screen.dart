@@ -81,7 +81,10 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
   }
 
   void _onGlobalRefresh() {
-    if (mounted) _loadTimetable();
+    if (mounted) {
+      setState(() {});
+      _loadTimetable();
+    }
   }
 
   @override
@@ -1212,59 +1215,28 @@ class _UpcomingSessionsList extends StatelessWidget {
     }
 
     final now = DateTime.now();
-    final dayNames = {
-      1: 'Mon',
-      2: 'Tue',
-      3: 'Wed',
-      4: 'Thu',
-      5: 'Fri',
-      6: 'Sat',
-      7: 'Sun'
-    };
-    final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final todayIndex = now.weekday - 1;
+    final currentDayStr = DateFormat('EEE').format(now); // e.g. "Thu"
 
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
-      final slotDayStr = s['day'] as String?;
-      if (slotDayStr == null) return false;
+      if (s['day'] != currentDayStr) return false;
 
-      final slotDayIndex = dayNamesList.indexOf(slotDayStr);
-      if (slotDayIndex < 0) return false;
-
-      bool isToday = slotDayIndex == todayIndex;
-      bool isYesterday = false;
-      if (todayIndex == 0 && slotDayIndex == 6)
-        isYesterday = true;
-      else if (slotDayIndex == todayIndex - 1) isYesterday = true;
-
-      if (!isToday && !isYesterday) return false;
-
-      final startTimeStr = s['startTime'] as String?;
-      final endTimeStr = s['endTime'] as String?;
-      if (endTimeStr == null || startTimeStr == null) return true;
+      final startTimeStrRaw = s['startTime'] as String? ?? '00:00';
+      final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
+      
       try {
-        final startParts = startTimeStr.split(':');
-        final endParts = endTimeStr.split(':');
-        final startHour = int.parse(startParts[0]);
+        final endParts = endTimeStrRaw.split(':');
         final endHour = int.parse(endParts[0]);
         final endMin = int.parse(endParts[1]);
 
         DateTime endDateTime =
             DateTime(now.year, now.month, now.day, endHour, endMin);
-        if (isYesterday) {
-          endDateTime = endDateTime.subtract(const Duration(days: 1));
-        }
-        if (endHour < startHour) {
-          endDateTime = endDateTime.add(const Duration(days: 1));
-        }
 
         // If the session ended before 'now', it shouldn't be in Upcoming anymore
-        // UNLESS it's from yesterday and still running!
         if (endDateTime.isBefore(now)) return false;
 
         return true;
       } catch (e) {
-        return true;
+        return true; // Fallback to include if parsing fails
       }
     }).toList();
 
