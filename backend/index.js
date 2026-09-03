@@ -1475,6 +1475,7 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget) {
         }
       });
     });
+    });
   }, 1000);
 }
 
