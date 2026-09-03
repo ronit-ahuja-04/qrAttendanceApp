@@ -874,7 +874,8 @@ app.get('/sessions/active/:courseCode', (req, res) => {
 // 8) Get My Sessions (Faculty)
 app.get('/api/sessions/faculty/:facultyId', (req, res) => {
   const query = `
-    SELECT sessions.*, users.name as proxyFacultyName 
+    SELECT sessions.*, users.name as proxyFacultyName,
+      (SELECT COUNT(*) FROM attendance_records WHERE sessionId = sessions.id AND status = 'present') as presentCount
     FROM sessions 
     LEFT JOIN users ON sessions.proxyFacultyId = users.id 
     WHERE facultyId = ? OR proxyFacultyId = ?
@@ -1057,6 +1058,7 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
         db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
         sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
+        notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
 
         res.json({ success: true, message: 'Attendance finalized successfully.' });
       });

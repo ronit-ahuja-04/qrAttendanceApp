@@ -677,6 +677,7 @@ AttendanceSession _parseSession(Map<String, dynamic> json) {
     proxyFacultyName: json['proxyFacultyName'],
     batchTarget: json['batchTarget'],
     slotId: json['slotId'],
+    presentCount: json['presentCount'] ?? 0,
   );
 }
 

@@ -1311,7 +1311,9 @@ class _UpcomingSessionsList extends StatelessWidget {
             time: '$startTimeStr - $endTimeStr',
             venue: session['venue'] as String? ?? 'TBA',
             course: session['subject'] as String? ?? 'Unknown',
-            students: 60, // Placeholder, will come from backend
+            students: session['_hasSession'] == true 
+                ? '${session['_sessionData'].presentCount}/${session['_sessionData'].enrolledStudentIds.length}'
+                : '-',
             status: statusText,
             isUpcoming: true,
             batch: session['batchTarget'] as String?,
@@ -1400,7 +1402,7 @@ class _RecentSessionsList extends StatelessWidget {
             time: timeStr,
             venue: session.status == SessionStatus.active ? 'Running' : 'Completed',
             course: session.courseCode,
-            students: 0,
+            students: '${session.presentCount}/${session.enrolledStudentIds.length}',
             status: session.status == SessionStatus.active ? 'Live' : 'Closed',
             isUpcoming: session.status == SessionStatus.active,
             batch: session.batchTarget,
@@ -1461,7 +1463,7 @@ class _SessionTile extends StatefulWidget {
   final String time;
   final String venue;
   final String course;
-  final int students;
+  final String students;
   final String status;
   final bool isUpcoming;
   final String? batch;
@@ -1705,13 +1707,13 @@ class _SessionTileState extends State<_SessionTile> {
                                     fontSize: 12)),
                           ),
                           const SizedBox(height: 8),
-                          if (widget.status.toUpperCase() == 'COMPLETED') ...[
+                          if (widget.status.toUpperCase() == 'COMPLETED' || widget.status == 'Closed') ...[
                             Row(
                               children: [
                                 Icon(Icons.people_outline,
                                     size: 16, color: Colors.grey.shade500),
                                 const SizedBox(width: 4),
-                                Text('${widget.students} Present',
+                                Text(widget.students == '-' ? 'No Data' : '${widget.students} Present',
                                     style: context.textStyles.vesitBodyMd.copyWith(
                                         color: context.colors.onSurfaceVariant,
                                         fontWeight: FontWeight.w600)),

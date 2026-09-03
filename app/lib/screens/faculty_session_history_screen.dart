@@ -25,7 +25,7 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
     super.initState();
     _loadHistory();
     _notificationSub = NotificationService().events.listen((event) {
-      if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED'].contains(event['type'])) {
+      if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED', 'ATTENDANCE_SUBMITTED', 'PROXY_AUTO_APPROVED', 'PROXY_APPROVED'].contains(event['type'])) {
         _loadHistory();
       }
     });
@@ -61,34 +61,40 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text('Session History', style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: context.colors.vesitPrimary),
-            onPressed: _loadHistory,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _sessions.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history_toggle_off, size: 64, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text('No completed sessions found.', style: context.textStyles.vesitBodyLg.copyWith(color: Colors.grey.shade600)),
+      body: RefreshIndicator(
+        onRefresh: _loadHistory,
+        color: context.colors.vesitPrimary,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _sessions.isEmpty
+                ? CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverFillRemaining(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.history_toggle_off, size: 64, color: Colors.grey.shade400),
+                              const SizedBox(height: 16),
+                              Text('No completed sessions found.', style: context.textStyles.vesitBodyLg.copyWith(color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                    itemCount: _sessions.length,
+                    itemBuilder: (context, index) {
+                      final session = _sessions[index];
+                      return _HistoryCard(session: session);
+                    },
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                  itemCount: _sessions.length,
-                  itemBuilder: (context, index) {
-                    final session = _sessions[index];
-                    return _HistoryCard(session: session);
-                  },
-                ),
+      ),
     );
   }
 }

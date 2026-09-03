@@ -189,10 +189,14 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 children: [
                   const _Header(),
                   Expanded(
-                    child: ListView(
-                      controller: widget.scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
-                      children: [
+                    child: RefreshIndicator(
+                      onRefresh: _loadHistory,
+                      color: context.colors.vesitPrimary,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        controller: widget.scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
+                        children: [
                         _DateBanner(),
                         const SizedBox(height: 12),
                         _StatsRow(
@@ -256,7 +260,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                       ],
                     ),
                   ),
-                ],
+                ),
+              ],
               ),
             
           ],

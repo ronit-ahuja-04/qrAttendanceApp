@@ -79,6 +79,7 @@ class AttendanceSession {
   final String? proxyFacultyName;
   final String? batchTarget;
   final String? slotId;
+  final int presentCount;
 
   AttendanceSession({
     required this.id,
@@ -93,6 +94,7 @@ class AttendanceSession {
     this.proxyFacultyName,
     this.batchTarget,
     this.slotId,
+    this.presentCount = 0,
   });
 
   AttendanceSession copyWith({
@@ -109,6 +111,7 @@ class AttendanceSession {
     String? proxyFacultyName,
     String? batchTarget,
     String? slotId,
+    int? presentCount,
   }) {
     return AttendanceSession(
       id: id ?? this.id,
@@ -123,6 +126,7 @@ class AttendanceSession {
       proxyFacultyName: proxyFacultyName ?? this.proxyFacultyName,
       batchTarget: batchTarget ?? this.batchTarget,
       slotId: slotId ?? this.slotId,
+      presentCount: presentCount ?? this.presentCount,
     );
   }
 }
