@@ -1193,12 +1193,14 @@ class _UpcomingSessionsList extends StatelessWidget {
     }).map((s) {
       bool hasSession = false;
       SessionStatus? existingStatus;
+      dynamic sessionData;
       for (var ts in todaySessions) {
         final slotId = s['id'] ?? s['_id'];
         if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
           if (ts.slotId == slotId) {
             hasSession = true;
             existingStatus = ts.status;
+            sessionData = ts;
             break;
           }
         } else {
@@ -1207,6 +1209,7 @@ class _UpcomingSessionsList extends StatelessWidget {
           if (subject.isNotEmpty && ts.courseCode.contains(subject) && ts.batchTarget == s['batchTarget']) {
             hasSession = true;
             existingStatus = ts.status;
+            sessionData = ts;
             break;
           }
         }
@@ -1214,7 +1217,8 @@ class _UpcomingSessionsList extends StatelessWidget {
       return {
         ...s, 
         '_hasSession': hasSession, 
-        '_existingStatus': existingStatus
+        '_existingStatus': existingStatus,
+        '_sessionData': sessionData
       };
     }).toList();
 
