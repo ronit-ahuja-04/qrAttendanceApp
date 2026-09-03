@@ -36,11 +36,19 @@ const allowedOrigins = [
 app.use(cors({
   origin: function(origin, callback) {
     if(!origin) return callback(null, true);
-    if(allowedOrigins.indexOf(origin) === -1){
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    
+    // Allow any localhost port for development
+    if (origin.startsWith('http://localhost:')) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    
+    // Allow any vercel deployment and production domains
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
   }
 }));
 app.use(express.json());
