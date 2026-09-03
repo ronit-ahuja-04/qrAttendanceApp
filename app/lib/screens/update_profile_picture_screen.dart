@@ -183,8 +183,11 @@ class _DropWell extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AspectRatio(
-        aspectRatio: 1,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: AspectRatio(
+            aspectRatio: 1,
         child: DottedBorder(
           child: Center(
             child: Column(
@@ -242,6 +245,8 @@ class _DropWell extends StatelessWidget {
               ],
             ),
           ),
+        ),
+        ),
         ),
       ),
     );
