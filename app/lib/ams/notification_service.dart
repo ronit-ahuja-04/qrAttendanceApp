@@ -7,10 +7,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../screens/student_dashboard_screen.dart';
-import '../screens/attendance_history_screen.dart';
-import '../screens/faculty_dashboard_screen.dart';
-import '../screens/generate_report_screen.dart';
+import '../screens/notifications_screen.dart';
+import '../screens/faculty_notifications_screen.dart';
 import '../theme/app_colors.dart';
 import 'api_services.dart';
 import 'globals.dart';
@@ -165,28 +163,10 @@ class NotificationService {
       if (context == null) return;
       
       try {
-        final event = jsonDecode(response.payload!);
-        final type = event['type'];
-
-        switch (type) {
-          case 'N001':
-          case 'N002':
-          case 'N004':
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentDashboardScreen()));
-            break;
-          case 'N003':
-          case 'N005':
-          case 'LOW_ATTENDANCE':
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen()));
-            break;
-          case 'N006':
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultyDashboardScreen()));
-            break;
-          case 'N007':
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateReportScreen()));
-            break;
-          default:
-            break;
+        if (AmsGlobals.loggedInUser?.isFaculty == true) {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultyNotificationsScreen()));
+        } else {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
         }
       } catch (e) {
         print('Error handling notification tap: $e');
