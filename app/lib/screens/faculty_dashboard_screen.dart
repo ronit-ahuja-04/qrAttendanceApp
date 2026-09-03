@@ -173,9 +173,9 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _FacultyProfileBlock(isLoading: _isLoading),
+                          _FacultyProfileBlock(),
                           const SizedBox(height: 40),
-                          _SidebarMenu(isLoading: _isLoading, onRefresh: _loadTimetable),
+                          _SidebarMenu(onRefresh: _loadTimetable),
                         ],
                       ),
                     ),
@@ -261,7 +261,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                     color: context.colors.vesitWhite,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
-                    child: _FacultyProfileCompact(isLoading: _isLoading, onTap: widget.onProfileTap),
+                    child: _FacultyProfileCompact(onTap: widget.onProfileTap),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
@@ -387,26 +387,12 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
 }
 
 class _FacultyProfileBlock extends StatelessWidget {
-  const _FacultyProfileBlock({required this.isLoading});
-  final bool isLoading;
+  const _FacultyProfileBlock();
 
   @override
   Widget build(BuildContext context) {
     final userName = AmsGlobals.loggedInUser?.formattedName ?? 'John Smith';
     final userEmail = AmsGlobals.loggedInUser?.email ?? 'faculty@ves.ac.in';
-
-    if (isLoading) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          VesitSkeleton(width: 80, height: 80, borderRadius: 40),
-          SizedBox(height: 24),
-          VesitSkeleton(width: 200, height: 32),
-          SizedBox(height: 8),
-          VesitSkeleton(width: 150, height: 20),
-        ],
-      );
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,31 +422,13 @@ class _FacultyProfileBlock extends StatelessWidget {
 }
 
 class _FacultyProfileCompact extends StatelessWidget {
-  const _FacultyProfileCompact({required this.isLoading, this.onTap});
-  final bool isLoading;
+  const _FacultyProfileCompact({this.onTap});
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final userName = AmsGlobals.loggedInUser?.formattedName ?? 'John Smith';
     final userEmail = AmsGlobals.loggedInUser?.email ?? 'faculty@ves.ac.in';
-
-    if (isLoading) {
-      return const Row(
-        children: [
-          VesitSkeleton(width: 56, height: 56, borderRadius: 28),
-          SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              VesitSkeleton(width: 150, height: 20),
-              SizedBox(height: 4),
-              VesitSkeleton(width: 100, height: 14),
-            ],
-          ),
-        ],
-      );
-    }
 
     return GestureDetector(
       onTap: onTap,
@@ -505,23 +473,11 @@ class _FacultyProfileCompact extends StatelessWidget {
 }
 
 class _SidebarMenu extends StatelessWidget {
-  const _SidebarMenu({required this.isLoading, required this.onRefresh});
-  final bool isLoading;
+  const _SidebarMenu({required this.onRefresh});
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return Column(
-        children: List.generate(
-            4,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 48, borderRadius: 8),
-                )),
-      );
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

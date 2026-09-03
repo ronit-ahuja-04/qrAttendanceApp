@@ -150,7 +150,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   }
 
   Future<void> _fetchData() async {
-    if (mounted) setState(() => _isLoading = true);
+    if (mounted && _rawSessions.isEmpty) setState(() => _isLoading = true);
     await Future.wait([_fetchStats(), _fetchTimetable()]);
     if (mounted) setState(() => _isLoading = false);
   }
@@ -195,7 +195,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               onAvatarTap: widget.onProfileTap ?? () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const StudentProfileScreen())),
               onRefreshTap: () {
-                setState(() => _isLoading = true);
                 _fetchData();
               },
             ),
