@@ -1272,34 +1272,17 @@ class _UpcomingSessionsList extends StatelessWidget {
         final startTimeStr = _formatTimeString(startTimeStrRaw);
         final endTimeStr = _formatTimeString(endTimeStrRaw);
 
-        bool isYesterday = false;
-        final sDay = session['day'] as String?;
-        if (sDay != null) {
-          final idx = dayNamesList.indexOf(sDay);
-          if (idx >= 0) {
-            if (todayIndex == 0 && idx == 6)
-              isYesterday = true;
-            else if (idx == todayIndex - 1) isYesterday = true;
-          }
-        }
-
         String statusText = 'Scheduled';
         try {
           final sParts = startTimeStrRaw.split(':');
           final sHour = int.parse(sParts[0]);
           final sMin = int.parse(sParts[1]);
           var sDateTime = DateTime(now.year, now.month, now.day, sHour, sMin);
-          if (isYesterday) {
-            sDateTime = sDateTime.subtract(const Duration(days: 1));
-          }
 
           final eParts = endTimeStrRaw.split(':');
           final eHour = int.parse(eParts[0]);
           final eMin = int.parse(eParts[1]);
           var eDateTime = DateTime(now.year, now.month, now.day, eHour, eMin);
-          if (isYesterday) {
-            eDateTime = eDateTime.subtract(const Duration(days: 1));
-          }
 
           if (eDateTime.isBefore(sDateTime)) {
             eDateTime = eDateTime.add(const Duration(days: 1));
