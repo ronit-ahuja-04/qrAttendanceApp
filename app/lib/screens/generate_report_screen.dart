@@ -188,6 +188,36 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _fetchReport() async {
     final list = await AmsGlobals.sessionService.getVerificationList(widget.session.id);
+    
+    // Sort alphanumerically by roll number
+    int compareAlphanumeric(String a, String b) {
+      final regExp = RegExp(r'(\d+|\D+)');
+      final aMatches = regExp.allMatches(a).map((m) => m.group(0)!).toList();
+      final bMatches = regExp.allMatches(b).map((m) => m.group(0)!).toList();
+      
+      for (int i = 0; i < aMatches.length && i < bMatches.length; i++) {
+        final aPart = aMatches[i];
+        final bPart = bMatches[i];
+        
+        final aInt = int.tryParse(aPart);
+        final bInt = int.tryParse(bPart);
+        
+        if (aInt != null && bInt != null) {
+          final comp = aInt.compareTo(bInt);
+          if (comp != 0) return comp;
+        } else {
+          final comp = aPart.compareTo(bPart);
+          if (comp != 0) return comp;
+        }
+      }
+      return aMatches.length.compareTo(bMatches.length);
+    }
+    
+    list.sort((a, b) => compareAlphanumeric(
+      (a['rollNo'] ?? '').toString(),
+      (b['rollNo'] ?? '').toString(),
+    ));
+
     if (mounted) {
       setState(() {
         _students = list;
