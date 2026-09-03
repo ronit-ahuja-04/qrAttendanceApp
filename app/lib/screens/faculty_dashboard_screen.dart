@@ -1278,8 +1278,8 @@ class _UpcomingSessionsList extends StatelessWidget {
 
           final diff = sDateTime.difference(now);
 
-          if (slot['_hasSession'] == true) {
-             final st = slot['_existingStatus'];
+          if (session['_hasSession'] == true) {
+             final st = session['_existingStatus'];
              if (st == SessionStatus.active) {
                statusText = 'Live';
              } else if (st == SessionStatus.scheduled) {
