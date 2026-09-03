@@ -349,10 +349,16 @@ class ApiSessionService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final url = data['profilePictureUrl'];
+        final String? url = data['profilePictureUrl'];
+        final cacheBustedUrl = url != null 
+            ? url.contains('?') 
+                ? '$url&v=${DateTime.now().millisecondsSinceEpoch}' 
+                : '$url?v=${DateTime.now().millisecondsSinceEpoch}'
+            : null;
+
         if (AmsGlobals.loggedInUser != null) {
           AmsGlobals.loggedInUser = AmsGlobals.loggedInUser!.copyWith(
-            profilePictureUrl: url,
+            profilePictureUrl: cacheBustedUrl,
           );
           
           final prefs = await SharedPreferences.getInstance();
