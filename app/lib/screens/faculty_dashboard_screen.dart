@@ -1211,6 +1211,15 @@ class _UpcomingSessionsList extends StatelessWidget {
       final hasSession = todaySessions.any((ts) => ts.courseCode == s['subject'] && ts.batchTarget == s['batchTarget']);
       if (hasSession) return false;
 
+      final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
+      final eParts = endTimeStrRaw.split(':');
+      if (eParts.length == 2) {
+        final eHour = int.parse(eParts[0]);
+        final eMin = int.parse(eParts[1]);
+        final endDateTime = DateTime(now.year, now.month, now.day, eHour, eMin);
+        if (now.isAfter(endDateTime)) return false;
+      }
+
       return true;
     }).toList();
 
