@@ -100,13 +100,11 @@ class _AttendanceSubmittedScreenState extends State<AttendanceSubmittedScreen>
     if (!mounted) return;
     setState(() => _isRedirecting = true);
 
-    // Simulate network buffering / DB save
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 300)); // Short UI transition
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      FadeBlurPageRoute(page: const FacultyMainLayout()),
-      (route) => false,
-    );
+    
+    AmsGlobals.refreshNotifier.value++; // Trigger dashboard refresh
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override

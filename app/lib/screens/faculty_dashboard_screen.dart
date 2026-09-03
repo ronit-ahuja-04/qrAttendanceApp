@@ -98,7 +98,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
   Future<void> _loadTimetable() async {
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
-      if (mounted) setState(() => _isLoading = true);
+      if (mounted && _allSessions.isEmpty) setState(() => _isLoading = true);
       final slots = await ApiSessionService().getTimetable(user.id);
       final sessions = await ApiSessionService().getFacultySessions(user.id);
       final pending =
@@ -1146,6 +1146,22 @@ class _UpcomingSessionsList extends StatelessWidget {
 
 
 
+                    if (session['_hasSession'] == true) {
+                      return ElevatedButton(
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledForegroundColor: Colors.grey.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Session attendance marked successfully',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                      );
+                    }
+
                     return ElevatedButton(
                       onPressed: () async {
                         Navigator.of(ctx).pop(); // Close modal
@@ -1207,14 +1223,6 @@ class _UpcomingSessionsList extends StatelessWidget {
 
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
       if (s['day'] != currentDayStr) return false;
-      
-      final hasSession = todaySessions.any((ts) {
-        if (ts.slotId != null && ts.slotId!.isNotEmpty) {
-          return ts.slotId == s['id'];
-        }
-        return ts.courseCode.contains(s['subject']) && ts.batchTarget == s['batchTarget'];
-      });
-      if (hasSession) return false;
 
       final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
       final eParts = endTimeStrRaw.split(':');
@@ -1226,6 +1234,14 @@ class _UpcomingSessionsList extends StatelessWidget {
       }
 
       return true;
+    }).map((s) {
+      final hasSession = todaySessions.any((ts) {
+        if (ts.slotId != null && ts.slotId!.isNotEmpty) {
+          return ts.slotId == s['id'];
+        }
+        return ts.courseCode.contains(s['subject']) && ts.batchTarget == s['batchTarget'];
+      });
+      return {...s, '_hasSession': hasSession};
     }).toList();
 
     // Sort them by time for the dashboard
