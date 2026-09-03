@@ -25,9 +25,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _isNavigating = false;
-  double _overallPercentage = 0.0;
-  List<dynamic> _subjectsStats = [];
-  List<Map<String, dynamic>> _rawSessions = [];
+  double _overallPercentage = AmsGlobals.studentStats?['overallPercentage'] ?? 0.0;
+  List<dynamic> _subjectsStats = AmsGlobals.studentStats?['subjects'] ?? [];
+  List<Map<String, dynamic>> _rawSessions = List.from(AmsGlobals.studentTimetableSlots);
 
   StreamSubscription? _eventSub;
   late AnimationController _animController;
@@ -161,6 +161,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       final stats = await AmsGlobals.attendanceService.getStudentStats(userId);
       if (mounted) {
         setState(() {
+          AmsGlobals.studentStats = stats;
           _overallPercentage = stats['overallPercentage'] ?? 0.0;
           _subjectsStats = stats['subjects'] ?? [];
         });
@@ -176,7 +177,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       final dayStr = dayNames[now.weekday - 1];
       final slots =
           await AmsGlobals.sessionService.getStudentTimetableToday(user.id, dayStr);
-      if (mounted) setState(() => _rawSessions = slots);
+      if (mounted) setState(() { 
+        AmsGlobals.studentTimetableSlots = slots;
+        _rawSessions = slots; 
+      });
     }
   }
 
@@ -236,6 +240,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                                 _isNavigating = true;
                                 await Navigator.of(context).push(
                                     MaterialPageRoute(builder: (_) => const QrScannerScreen()));
+                                _fetchData();
                                 _isNavigating = false;
                               },
                             ),

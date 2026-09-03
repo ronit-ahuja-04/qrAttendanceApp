@@ -119,6 +119,19 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     }
   }
 
+  Future<void> _runWithLoading(Future<void> Function() action) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(child: CircularProgressIndicator(color: context.colors.vesitPrimary)),
+    );
+    try {
+      await action();
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1409,13 +1422,17 @@ class _RecentSessionsList extends StatelessWidget {
                 : (session.status == SessionStatus.active ? 'Force Close' : 'View Report'),
             onAction: isPendingProxy
                 ? () async {
-                    await AmsGlobals.sessionService.approveProxySession(session.id);
-                    onRefresh();
+                    await _runWithLoading(() async {
+                      await AmsGlobals.sessionService.approveProxySession(session.id);
+                      await _loadTimetable();
+                    });
                   }
                 : () async {
                     if (session.status == SessionStatus.active) {
-                      await AmsGlobals.sessionService.closeSession(session.id);
-                      onRefresh();
+                      await _runWithLoading(() async {
+                        await AmsGlobals.sessionService.closeSession(session.id);
+                        await _loadTimetable();
+                      });
                     } else {
                       Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => ReportDetailScreen(session: session)));
@@ -1423,8 +1440,10 @@ class _RecentSessionsList extends StatelessWidget {
                   },
             onReject: isPendingProxy
                 ? () async {
-                    await AmsGlobals.sessionService.rejectProxySession(session.id);
-                    onRefresh();
+                    await _runWithLoading(() async {
+                      await AmsGlobals.sessionService.rejectProxySession(session.id);
+                      await _loadTimetable();
+                    });
                   }
                 : null,
           ),

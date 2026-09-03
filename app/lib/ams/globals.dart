@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+wimport 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import 'models.dart';
@@ -16,6 +16,10 @@ class AmsGlobals {
   static final List<Map<String, dynamic>> timetableSlots = [];
   /// Global list of faculty sessions to cache the data and enable instant dashboard loading.
   static final List<AttendanceSession> facultySessions = [];
+
+  /// Global caching for student dashboard
+  static List<Map<String, dynamic>> studentTimetableSlots = [];
+  static Map<String, dynamic>? studentStats;
 
   /// Global notifier for ThemeMode (Light/Dark)
   static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
