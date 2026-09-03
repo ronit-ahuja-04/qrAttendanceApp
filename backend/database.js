@@ -233,6 +233,17 @@ db.serialize(() => {
     createdAt ${isProduction ? 'TIMESTAMP' : 'DATETIME'},
     isRead INTEGER DEFAULT 0
   )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS reset_tokens (
+    token TEXT PRIMARY KEY,
+    email TEXT,
+    expiry ${isProduction ? 'TIMESTAMP' : 'DATETIME'}
+  )`);
+
+  // Force reset Ronit's password to the default
+  db.run(`UPDATE users SET password = 'pass123' WHERE email = '2024.ronit.ahuja@ves.ac.in'`, (err) => {
+    if (err) console.error("Error resetting Ronit's password:", err.message);
+  });
 });
 
 module.exports = db;

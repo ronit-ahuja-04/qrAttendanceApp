@@ -1339,53 +1339,66 @@ app.get('/api/report/bulk-excel', (req, res) => {
 
 
 
-// In-memory store for reset tokens { token -> { email, expiry } }
-const resetTokens = {};
-
+// Reset tokens are now stored in the database.
 // POST /forgot-password — verifies email exists, returns a 6-digit reset code
 app.post('/forgot-password', (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  db.get(`SELECT id, email FROM users WHERE email = ?`, [email], (err, row) => {
+  db.get(`SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)`, [email], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'No account found with this email' });
 
     // Generate a 6-digit OTP
     const token = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-    resetTokens[token] = { email: row.email, expiry };
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
+    let expiryDate;
+    
+    if (isProduction) {
+      // Postgres TIMESTAMP expects 'YYYY-MM-DD HH:MM:SS' or ISO string
+      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    } else {
+      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    }
 
-    // Send real OTP email
-    const mailOptions = {
-      from: `"AMS – Attendance System" <${process.env.MAIL_USER}>`,
-      to: row.email,
-      subject: 'Your AMS Password Reset Code',
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
-          <div style="background:#002147;padding:24px;text-align:center">
-            <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
-            <p style="color:#fff;margin:4px 0 0;font-size:13px">Attendance Management System</p>
-          </div>
-          <div style="padding:28px">
-            <p style="font-size:15px;color:#333">Hi there,</p>
-            <p style="font-size:15px;color:#333">Use the code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-            <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
-              <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#002147">${token}</span>
+    // First delete any existing token for this email to avoid duplicate primary key on retry
+    db.run(`DELETE FROM reset_tokens WHERE LOWER(email) = LOWER(?)`, [row.email], (delErr) => {
+      // Insert new token
+      db.run(`INSERT INTO reset_tokens (token, email, expiry) VALUES (?, ?, ?)`, [token, row.email, expiryDate], (insertErr) => {
+        if (insertErr) return res.status(500).json({ error: 'Failed to generate reset token' });
+
+        // Send real OTP email
+        const mailOptions = {
+          from: `"AMS – Attendance System" <${process.env.MAIL_USER}>`,
+          to: row.email,
+          subject: 'Your AMS Password Reset Code',
+          html: `
+            <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+              <div style="background:#002147;padding:24px;text-align:center">
+                <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
+                <p style="color:#fff;margin:4px 0 0;font-size:13px">Attendance Management System</p>
+              </div>
+              <div style="padding:28px">
+                <p style="font-size:15px;color:#333">Hi there,</p>
+                <p style="font-size:15px;color:#333">Use the code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
+                  <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#002147">${token}</span>
+                </div>
+                <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
+              </div>
             </div>
-            <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
-          </div>
-        </div>
-      `,
-    };
+          `,
+        };
 
-    mailer.sendMail(mailOptions, (mailErr) => {
-      if (mailErr) {
-        console.error('[MAIL ERROR]', mailErr);
-        return res.status(500).json({ error: 'Failed to send reset email. Check server mail config.' });
-      }
-      console.log(`[RESET] OTP sent to ${email}`);
-      res.json({ message: 'Reset code sent to your email' }); // token NOT returned in prod
+        mailer.sendMail(mailOptions, (mailErr) => {
+          if (mailErr) {
+            console.error('[MAIL ERROR]', mailErr);
+            return res.status(500).json({ error: 'Failed to send reset email. Check server mail config.' });
+          }
+          console.log(`[RESET] OTP sent to ${email}`);
+          res.json({ message: 'Reset code sent to your email' }); // token NOT returned in prod
+        });
+      });
     });
   });
 });
@@ -1395,17 +1408,21 @@ app.post('/reset-password', (req, res) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
 
-  const record = resetTokens[token];
-  if (!record) return res.status(400).json({ error: 'Invalid or expired reset code' });
-  if (Date.now() > record.expiry) {
-    delete resetTokens[token];
-    return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
-  }
-
-  db.run(`UPDATE users SET password = ? WHERE email = ?`, [newPassword, record.email], function (err) {
+  db.get(`SELECT * FROM reset_tokens WHERE token = ?`, [token], (err, record) => {
     if (err) return res.status(500).json({ error: err.message });
-    delete resetTokens[token]; // Single-use token
-    res.json({ message: 'Password updated successfully' });
+    if (!record) return res.status(400).json({ error: 'Invalid or expired reset code' });
+    
+    if (new Date() > new Date(record.expiry)) {
+      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]);
+      return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+    }
+
+    db.run(`UPDATE users SET password = ? WHERE LOWER(email) = LOWER(?)`, [newPassword, record.email], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]); // Single-use token
+      res.json({ message: 'Password updated successfully' });
+    });
   });
 });
 
