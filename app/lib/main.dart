@@ -17,10 +17,14 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await NotificationService().init(navigatorKey);
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await NotificationService().init(navigatorKey);
+  } catch (e) {
+    print('Failed to initialize Firebase: $e');
+  }
   await AmsGlobals.initTheme();
   runApp(const AttendancePortalApp());
 }
