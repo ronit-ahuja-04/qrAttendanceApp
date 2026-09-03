@@ -98,6 +98,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
   Future<void> _loadTimetable() async {
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
+      if (mounted) setState(() => _isLoading = true);
       final slots = await ApiSessionService().getTimetable(user.id);
       final sessions = await ApiSessionService().getFacultySessions(user.id);
       final pending =

@@ -45,7 +45,8 @@ app.use((req, res, next) => {
     '/login',
     '/forgot-password',
     '/reset-password',
-    '/uploads'
+    '/uploads',
+    '/profile-images'
   ];
   
   if (publicPaths.some(p => req.path.startsWith(p))) {
@@ -257,6 +258,35 @@ function generateQrCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function formatProfilePictureUrl(url, userId) {
+  if (!url) return url;
+  if (url.startsWith('data:')) {
+    return `/profile-images/${userId}`;
+  }
+  return url;
+}
+
+app.get('/profile-images/:id', (req, res) => {
+  const userId = req.params.id;
+  db.get('SELECT profilePictureUrl FROM users WHERE id = ?', [userId], (err, row) => {
+    if (err) return res.status(500).send(err.message);
+    if (!row || !row.profilePictureUrl) {
+      return res.redirect('https://ui-avatars.com/api/?name=User&background=random');
+    }
+    const url = row.profilePictureUrl;
+    if (url.startsWith('data:')) {
+      const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return res.status(500).send('Invalid base64 string');
+      res.set('Content-Type', matches[1]);
+      res.send(Buffer.from(matches[2], 'base64'));
+    } else if (url.startsWith('http') || url.startsWith('/uploads')) {
+      res.redirect(url);
+    } else {
+      res.redirect('https://ui-avatars.com/api/?name=User&background=random');
+    }
+  });
+});
+
 app.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
   console.log('Login attempt:', email, password);
@@ -265,6 +295,7 @@ app.post('/login', loginLimiter, (req, res) => {
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
     
     row.branch = 'INFT'; // Hardcode branch for now as per user request
+    row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
 
     if (row.role === 'faculty') {
       db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
@@ -318,7 +349,13 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
     // Fallback: Use Base64 if memory storage was used to avoid ephemeral disk loss on Render
     if (!req.file.filename && req.file.buffer) {
       const base64Data = req.file.buffer.toString('base64');
-      url = `data:${req.file.mimetype};base64,${base64Data}`;
+      const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
+      
+      db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [dataUri, userId], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ profilePictureUrl: formatProfilePictureUrl(dataUri, userId) });
+      });
+      return;
     } else {
       url = `/uploads/${req.file.filename}`;
     }
@@ -326,7 +363,7 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
 
   db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ profilePictureUrl: url });
+    res.json({ profilePictureUrl: formatProfilePictureUrl(url, userId) });
   });
 });
 
