@@ -74,12 +74,9 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                     _SettingsButton(
                       icon: Icons.calendar_month_outlined,
                       label: 'Manage Timetable',
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const FacultyTimetableManagerScreen()),
-                        );
-                        _refresh();
-                      },
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const FacultyTimetableManagerScreen()),
+                      ),
                     ),
                   if (user?.role != 'student') const SizedBox(height: 12),
                   _SettingsButton(
@@ -110,11 +107,11 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                           value: isDark,
                           activeColor: context.colors.vesitPrimary,
                           onChanged: (val) {
-                            AmsGlobals.setTheme(val ? ThemeMode.dark : ThemeMode.light);
+                            AmsGlobals.themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
                           },
                         ),
                         onTap: () {
-                           AmsGlobals.setTheme(isDark ? ThemeMode.light : ThemeMode.dark);
+                           AmsGlobals.themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
                         },
                       );
                     },

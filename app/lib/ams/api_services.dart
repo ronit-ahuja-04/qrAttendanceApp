@@ -1,44 +1,21 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'notification_service.dart';
 import 'globals.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:image_picker/image_picker.dart';
 
-
-class AuthenticatedClient extends http.BaseClient {
-  final http.Client _inner = http.Client();
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJsonStr = prefs.getString('ams_user_session');
-    if (userJsonStr != null) {
-      try {
-        final Map<String, dynamic> userMap = jsonDecode(userJsonStr);
-        if (userMap['token'] != null) {
-          request.headers['Authorization'] = 'Bearer ${userMap['token']}';
-        }
-      } catch (e) {}
-    }
-    return _inner.send(request);
-  }
-}
-
-final httpClient = AuthenticatedClient();
-
-
 String get baseUrl {
-  return 'https://qr-attendance-api-wvvs.onrender.com';
+  // Use localhost (now that backend binds to IPv6 as well)
+  return 'http://localhost:3000';
 }
 
 class ApiSessionService {
   Future<void> updateFcmToken(String userId, String token) async {
     try {
-      await httpClient.post(
+      await http.post(
         Uri.parse('$baseUrl/update-fcm-token'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': userId, 'fcmToken': token}),
@@ -50,7 +27,7 @@ class ApiSessionService {
 
   Future<void> updateNotificationPrefs(String userId, Map<String, bool> prefs) async {
     try {
-      await httpClient.post(
+      await http.post(
         Uri.parse('$baseUrl/update-notification-prefs'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': userId, 'prefs': prefs}),
@@ -63,7 +40,7 @@ class ApiSessionService {
   Future<List<Map<String, dynamic>>> getTimetable(String facultyId) async {
     try {
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(
+      final response = await http.get(
         Uri.parse('$baseUrl/timetable/${Uri.encodeComponent(facultyId)}?_t=$cacheBuster'),
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -84,7 +61,7 @@ class ApiSessionService {
   Future<List<Map<String, dynamic>>> getStudentTimetableToday(String studentId, String day) async {
     try {
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(
+      final response = await http.get(
         Uri.parse('$baseUrl/api/timetable/student/${Uri.encodeComponent(studentId)}?day=${Uri.encodeComponent(day)}&_t=$cacheBuster'),
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -105,7 +82,7 @@ class ApiSessionService {
   Future<List<Map<String, dynamic>>> getStudentTimetableFull(String studentId) async {
     try {
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(
+      final response = await http.get(
         Uri.parse('$baseUrl/api/timetable/student/${Uri.encodeComponent(studentId)}?_t=$cacheBuster'),
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -126,7 +103,7 @@ class ApiSessionService {
   Future<List<Map<String, dynamic>>> getStudentAttendanceHistory(String studentId) async {
     try {
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(
+      final response = await http.get(
         Uri.parse('$baseUrl/api/attendance/student/${Uri.encodeComponent(studentId)}/history?_t=$cacheBuster'),
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -146,7 +123,7 @@ class ApiSessionService {
 
   Future<String?> createTimetableSlot(Map<String, dynamic> slotData) async {
     try {
-      final response = await httpClient.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/api/timetable'),
         headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
         body: jsonEncode(slotData),
@@ -161,7 +138,7 @@ class ApiSessionService {
 
   Future<String?> updateTimetableSlot(String id, Map<String, dynamic> slotData) async {
     try {
-      final response = await httpClient.put(
+      final response = await http.put(
         Uri.parse('$baseUrl/api/timetable/${Uri.encodeComponent(id)}'),
         headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
         body: jsonEncode(slotData),
@@ -176,7 +153,7 @@ class ApiSessionService {
 
   Future<bool> deleteTimetableSlot(String id) async {
     try {
-      final response = await httpClient.delete(
+      final response = await http.delete(
         Uri.parse('$baseUrl/api/timetable/${Uri.encodeComponent(id)}'),
         headers: {'Bypass-Tunnel-Reminder': 'true'},
       );
@@ -189,7 +166,7 @@ class ApiSessionService {
 
   Future<List<Map<String, dynamic>>> getNotifications(String userId) async {
     try {
-      final res = await httpClient.get(Uri.parse('$baseUrl/api/notifications/$userId'));
+      final res = await http.get(Uri.parse('$baseUrl/api/notifications/$userId'));
       if (res.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(res.body));
       }
@@ -201,7 +178,7 @@ class ApiSessionService {
 
   Future<bool> markNotificationAsRead(String id) async {
     try {
-      final res = await httpClient.put(Uri.parse('$baseUrl/api/notifications/$id/read'));
+      final res = await http.put(Uri.parse('$baseUrl/api/notifications/$id/read'));
       return res.statusCode == 200;
     } catch (e) {
       return false;
@@ -210,7 +187,7 @@ class ApiSessionService {
 
   Future<bool> markAllNotificationsAsRead(String userId) async {
     try {
-      final res = await httpClient.put(Uri.parse('$baseUrl/api/notifications/user/$userId/read-all'));
+      final res = await http.put(Uri.parse('$baseUrl/api/notifications/user/$userId/read-all'));
       return res.statusCode == 200;
     } catch (e) {
       return false;
@@ -219,7 +196,7 @@ class ApiSessionService {
 
   Future<User?> login(String email, String password) async {
     try {
-      final response = await httpClient.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
         body: jsonEncode({'email': email, 'password': password}),
@@ -247,17 +224,12 @@ class ApiSessionService {
     } catch (e) {
       print('Error deleting FCM token: $e');
     }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('ams_user_session');
-    } catch (_) {}
-    AmsGlobals.loggedInUser = null;
   }
 
   /// Requests a password reset OTP for [email].
   /// The OTP is sent to the user's email. Throws an error message string on failure.
   Future<void> forgotPassword(String email) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/forgot-password'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({'email': email}),
@@ -271,7 +243,7 @@ class ApiSessionService {
   /// Resets password using the OTP [token] and [newPassword].
   /// Throws an error message string on failure.
   Future<void> resetPassword(String token, String newPassword) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/reset-password'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({'token': token, 'newPassword': newPassword}),
@@ -284,7 +256,7 @@ class ApiSessionService {
 
   /// Changes the user's password if current password is correct.
   Future<void> changePassword(String userId, String currentPassword, String newPassword) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/change-password'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -296,29 +268,6 @@ class ApiSessionService {
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw body['error'] ?? 'Failed to change password';
-    }
-  }
-
-
-  Future<User?> removeProfilePicture(String userId) async {
-    try {
-      final response = await httpClient.delete(
-        Uri.parse('$baseUrl/users/$userId/profile-picture'),
-      );
-      if (response.statusCode == 200) {
-        if (AmsGlobals.loggedInUser != null) {
-          AmsGlobals.loggedInUser = AmsGlobals.loggedInUser!.copyWith(
-            profilePictureUrl: '',
-          );
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('ams_user_session', jsonEncode(AmsGlobals.loggedInUser!.toJson()));
-        }
-        return AmsGlobals.loggedInUser;
-      }
-      return null;
-    } catch (e) {
-      print('Error removing profile picture: $e');
-      return null;
     }
   }
 
@@ -343,28 +292,20 @@ class ApiSessionService {
         ));
       }
 
-      // Use httpClient to ensure Authorization headers are added
-      final streamedResponse = await httpClient.send(request);
+      final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final String? url = data['profilePictureUrl'];
-        final cacheBustedUrl = url != null 
-            ? url.contains('?') 
-                ? '$url&v=${DateTime.now().millisecondsSinceEpoch}' 
-                : '$url?v=${DateTime.now().millisecondsSinceEpoch}'
-            : null;
-
-        if (AmsGlobals.loggedInUser != null) {
-          AmsGlobals.loggedInUser = AmsGlobals.loggedInUser!.copyWith(
-            profilePictureUrl: cacheBustedUrl,
-          );
-          
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('ams_user_session', jsonEncode(AmsGlobals.loggedInUser!.toJson()));
-        }
-        return AmsGlobals.loggedInUser;
+        final url = data['profilePictureUrl'];
+        return AmsGlobals.loggedInUser = User(
+          id: AmsGlobals.loggedInUser!.id,
+          role: AmsGlobals.loggedInUser!.role,
+          name: AmsGlobals.loggedInUser!.name,
+          email: AmsGlobals.loggedInUser!.email,
+          rollNo: AmsGlobals.loggedInUser!.rollNo,
+          profilePictureUrl: url,
+        );
       }
       return null;
     } catch (e) {
@@ -384,7 +325,7 @@ class ApiSessionService {
     bool autoApprove = false,
     String? slotId,
   }) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/sessions'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({
@@ -412,7 +353,7 @@ class ApiSessionService {
     required String endTime,
     required String date,
   }) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/sessions/smart-seminar'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({
@@ -439,7 +380,7 @@ class ApiSessionService {
   }
 
   Future<Result<AttendanceSession>> startSession(String sessionId, int ttlSeconds) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/api/sessions/$sessionId/start'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({'totalSessionSeconds': ttlSeconds}),
@@ -452,7 +393,7 @@ class ApiSessionService {
   }
 
   Future<Result<AttendanceSession>> rotateQrCode(String sessionId, int ttlSeconds) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/api/sessions/$sessionId/rotate-qr'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
       body: jsonEncode({'validitySeconds': ttlSeconds}),
@@ -465,7 +406,7 @@ class ApiSessionService {
   }
 
   Future<Result<bool>> closeSession(String sessionId) async {
-    final response = await httpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/api/sessions/$sessionId/close'),
       headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
     );
@@ -478,7 +419,7 @@ class ApiSessionService {
 
   Future<AttendanceSession?> getActiveSession(String courseCode) async {
     final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-    final response = await httpClient.get(Uri.parse('$baseUrl/sessions/active/${Uri.encodeComponent(courseCode)}?_t=$cacheBuster'));
+    final response = await http.get(Uri.parse('$baseUrl/sessions/active/${Uri.encodeComponent(courseCode)}?_t=$cacheBuster'));
     if (response.statusCode == 200) {
       return _parseSession(jsonDecode(response.body));
     }
@@ -488,7 +429,7 @@ class ApiSessionService {
   Future<List<AttendanceSession>> getFacultySessions(String facultyId) async {
     try {
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(Uri.parse('$baseUrl/api/sessions/faculty/${Uri.encodeComponent(facultyId)}?_t=$cacheBuster'));
+      final response = await http.get(Uri.parse('$baseUrl/api/sessions/faculty/${Uri.encodeComponent(facultyId)}?_t=$cacheBuster'));
       if (response.statusCode == 200) {
         final List<dynamic> body = jsonDecode(response.body);
         return body.map((r) => _parseSession(r)).toList();
@@ -501,7 +442,7 @@ class ApiSessionService {
   }
   Future<bool> approveProxySession(String sessionId) async {
     try {
-      final response = await httpClient.put(Uri.parse('$baseUrl/api/sessions/$sessionId/approve'));
+      final response = await http.put(Uri.parse('$baseUrl/api/sessions/$sessionId/approve'));
       return response.statusCode == 200;
     } catch (e) {
       print('APPROVE SESSION ERROR: $e');
@@ -509,19 +450,9 @@ class ApiSessionService {
     }
   }
 
-  Future<bool> rejectProxySession(String sessionId) async {
-    try {
-      final response = await httpClient.put(Uri.parse('$baseUrl/api/sessions/$sessionId/reject'));
-      return response.statusCode == 200;
-    } catch (e) {
-      print('REJECT SESSION ERROR: $e');
-      return false;
-    }
-  }
-
   Future<bool> declineProxySession(String sessionId) async {
     try {
-      final response = await httpClient.put(Uri.parse('$baseUrl/api/sessions/$sessionId/decline'));
+      final response = await http.put(Uri.parse('$baseUrl/api/sessions/$sessionId/decline'));
       return response.statusCode == 200;
     } catch (e) {
       print('DECLINE SESSION ERROR: $e');
@@ -532,7 +463,7 @@ class ApiSessionService {
   Future<List<Map<String, dynamic>>> getVerificationList(String sessionId) async {
     try {
       final t = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(Uri.parse('$baseUrl/sessions/$sessionId/verification?_t=$t'));
+      final response = await http.get(Uri.parse('$baseUrl/sessions/$sessionId/verification?_t=$t'));
       if (response.statusCode == 200) {
         final List<dynamic> body = jsonDecode(response.body);
         return body.map((r) => r as Map<String, dynamic>).toList();
@@ -557,28 +488,23 @@ class ApiAttendanceService {
     };
 
 
-    try {
-      final response = await httpClient.post(
-        Uri.parse('$baseUrl/api/attendance/mark'),
-        headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
-        body: jsonEncode(body),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return Result.success(_parseRecord(data['record'] ?? data));
-      }
-      final err = jsonDecode(response.body);
-      return Result.failure(_parseReason(err['error']), err['message'] ?? 'Error');
-    } catch (e) {
-      print('MARK ATTENDANCE ERROR: $e');
-      return Result.failure(RejectionReason.sessionNotFound, 'Failed to connect to server: $e');
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/attendance/mark'),
+      headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Result.success(_parseRecord(data['record'] ?? data));
     }
+    final err = jsonDecode(response.body);
+    return Result.failure(_parseReason(err['error']), err['message'] ?? 'Error');
   }
 
   Future<List<AttendanceRecord>> recordsFor(String sessionId) async {
     try {
       final t = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(Uri.parse('$baseUrl/sessions/$sessionId/attendance?_t=$t'));
+      final response = await http.get(Uri.parse('$baseUrl/sessions/$sessionId/attendance?_t=$t'));
       if (response.statusCode == 200) {
         final List<dynamic> body = jsonDecode(response.body);
         return body.map((r) => AttendanceRecord(
@@ -601,7 +527,7 @@ class ApiAttendanceService {
   Future<List<AttendanceRecord>> recordsDetailsFor(String sessionId) async {
     try {
       final t = DateTime.now().millisecondsSinceEpoch;
-      final response = await httpClient.get(Uri.parse('$baseUrl/sessions/$sessionId/attendance/details?_t=$t'));
+      final response = await http.get(Uri.parse('$baseUrl/sessions/$sessionId/attendance/details?_t=$t'));
       if (response.statusCode == 200) {
         final List<dynamic> body = jsonDecode(response.body);
         return body.map((r) => AttendanceRecord(
@@ -625,7 +551,7 @@ class ApiAttendanceService {
 
   Future<Map<String, dynamic>> getStudentStats(String studentId) async {
     try {
-      final response = await httpClient.get(Uri.parse('$baseUrl/api/attendance/student/${Uri.encodeComponent(studentId)}/stats'));
+      final response = await http.get(Uri.parse('$baseUrl/api/attendance/student/${Uri.encodeComponent(studentId)}/stats'));
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         return {
@@ -666,7 +592,7 @@ AttendanceSession _parseSession(Map<String, dynamic> json) {
     facultyId: json['facultyId'],
     status: SessionStatus.values.firstWhere((e) => e.name == json['status']),
     createdAt: DateTime.parse(json['createdAt']).toLocal(),
-    qrCode: (json['qrCode'] != null && json['qrCode'] is Map) ? QrCode(
+    qrCode: json['qrCode'] != null ? QrCode(
       code: json['qrCode']['code'],
       issuedAt: DateTime.parse(json['qrCode']['issuedAt']).toLocal(),
       expiresAt: DateTime.parse(json['qrCode']['expiresAt']).toLocal(),

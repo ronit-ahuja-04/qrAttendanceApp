@@ -27,7 +27,6 @@ class _ProxyApprovalsScreenState extends State<ProxyApprovalsScreen> {
   }
 
   Future<void> _fetchPendingApprovals() async {
-    if (_pendingSessions.isEmpty) setState(() => _isLoading = true);
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
       final sessions = await ApiSessionService().getFacultySessions(user.id);
@@ -49,6 +48,7 @@ class _ProxyApprovalsScreenState extends State<ProxyApprovalsScreen> {
     );
     if (!confirmed) return;
 
+    setState(() => _isLoading = true);
     final success = await AmsGlobals.sessionService.approveProxySession(session.id);
     if (success) {
       if (mounted) {
@@ -63,6 +63,7 @@ class _ProxyApprovalsScreenState extends State<ProxyApprovalsScreen> {
       }
       _fetchPendingApprovals(); // background sync
     } else {
+      setState(() => _isLoading = false);
       if (mounted) {
         VesitToast.show(context: context, title: 'Failed to approve session.', type: ToastType.info);
       }
@@ -78,6 +79,7 @@ class _ProxyApprovalsScreenState extends State<ProxyApprovalsScreen> {
     );
     if (!confirmed) return;
 
+    setState(() => _isLoading = true);
     final success = await AmsGlobals.sessionService.declineProxySession(session.id);
     if (success) {
       if (mounted) {
@@ -92,6 +94,7 @@ class _ProxyApprovalsScreenState extends State<ProxyApprovalsScreen> {
       }
       _fetchPendingApprovals(); // background sync
     } else {
+      setState(() => _isLoading = false);
       if (mounted) {
         VesitToast.show(context: context, title: 'Failed to decline session.', type: ToastType.info);
       }

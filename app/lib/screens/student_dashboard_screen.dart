@@ -24,10 +24,9 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
-  bool _isNavigating = false;
-  double _overallPercentage = AmsGlobals.studentStats?['overallPercentage'] ?? 0.0;
-  List<dynamic> _subjectsStats = AmsGlobals.studentStats?['subjects'] ?? [];
-  List<Map<String, dynamic>> _rawSessions = List.from(AmsGlobals.studentTimetableSlots);
+  double _overallPercentage = 0.0;
+  List<dynamic> _subjectsStats = [];
+  List<Map<String, dynamic>> _rawSessions = [];
 
   StreamSubscription? _eventSub;
   late AnimationController _animController;
@@ -133,11 +132,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         _fetchData();
       }
     });
-    AmsGlobals.refreshNotifier.addListener(_onGlobalRefresh);
-  }
-
-  void _onGlobalRefresh() {
-    if (mounted) _fetchData();
   }
 
   @override
@@ -145,12 +139,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     _animController.dispose();
     _timer?.cancel();
     _eventSub?.cancel();
-    AmsGlobals.refreshNotifier.removeListener(_onGlobalRefresh);
     super.dispose();
   }
 
   Future<void> _fetchData() async {
-    if (mounted && _rawSessions.isEmpty) setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     await Future.wait([_fetchStats(), _fetchTimetable()]);
     if (mounted) setState(() => _isLoading = false);
   }
@@ -161,7 +154,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       final stats = await AmsGlobals.attendanceService.getStudentStats(userId);
       if (mounted) {
         setState(() {
-          AmsGlobals.studentStats = stats;
           _overallPercentage = stats['overallPercentage'] ?? 0.0;
           _subjectsStats = stats['subjects'] ?? [];
         });
@@ -177,10 +169,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       final dayStr = dayNames[now.weekday - 1];
       final slots =
           await AmsGlobals.sessionService.getStudentTimetableToday(user.id, dayStr);
-      if (mounted) setState(() { 
-        AmsGlobals.studentTimetableSlots = slots;
-        _rawSessions = slots; 
-      });
+      if (mounted) setState(() => _rawSessions = slots);
     }
   }
 
@@ -198,9 +187,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   .push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               onAvatarTap: widget.onProfileTap ?? () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const StudentProfileScreen())),
-              onRefreshTap: () {
-                _fetchData();
-              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -208,7 +194,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 color: context.colors.vesitPrimary,
                 child: ListView(
                   controller: widget.scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 130),
                   children: [
                     _StaggeredFade(
@@ -235,14 +220,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                               title: 'Mark\nAttendance',
                               icon: Icons.qr_code_scanner_rounded,
                               highlighted: true,
-                              onTap: () async {
-                                if (_isNavigating) return;
-                                _isNavigating = true;
-                                await Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const QrScannerScreen()));
-                                _fetchData();
-                                _isNavigating = false;
-                              },
+                              onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const QrScannerScreen())),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -316,14 +295,12 @@ class _Header extends StatelessWidget {
     required this.studentName,
     required this.onNotificationsTap,
     required this.onAvatarTap,
-    required this.onRefreshTap,
   });
 
   final DateTime now;
   final String studentName;
   final VoidCallback onNotificationsTap;
   final VoidCallback onAvatarTap;
-  final VoidCallback onRefreshTap;
 
   String _getGreeting() {
     final h = now.hour;
@@ -412,19 +389,6 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: onRefreshTap,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: context.colors.outlineVariant, width: 1.5),
-              ),
-              child: Icon(Icons.refresh,
-                  color: context.colors.onSurface, size: 22),
             ),
           ),
           const SizedBox(width: 12),

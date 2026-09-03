@@ -57,7 +57,6 @@ class VerifyAttendanceScreen extends StatefulWidget {
 class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
   List<_StudentRow> _students = [];
   bool _isLoading = true;
-  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -128,7 +127,7 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
   }
 
   Future<void> _confirmAndSubmit() async {
-    setState(() => _isSubmitting = true);
+    setState(() => _isLoading = true);
     final total = _students.length;
     final present = _presentCount;
 
@@ -138,7 +137,7 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
     }).toList();
 
     try {
-      final response = await httpClient.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/api/sessions/${widget.sessionId}/attendance/finalize'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'updates': updates}),
@@ -159,7 +158,7 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isLoading = false);
         VesitToast.show(context: context, title: 'Error: $e', type: ToastType.info);
       }
     }
@@ -229,14 +228,8 @@ class _VerifyAttendanceScreenState extends State<VerifyAttendanceScreen> {
                 left: 16,
                 right: 16,
                 child: VesitButton(
-                  label: _isSubmitting ? 'SUBMITTING...' : 'CONFIRM & SUBMIT ATTENDANCE',
-                  onPressed: _isSubmitting ? () {} : _confirmAndSubmit,
-                ),
-              ),
-            if (_isSubmitting)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  label: 'CONFIRM & SUBMIT ATTENDANCE',
+                  onPressed: _confirmAndSubmit,
                 ),
               ),
           ],

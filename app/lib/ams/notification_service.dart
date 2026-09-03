@@ -84,13 +84,6 @@ class NotificationService {
       sound: true,
     );
 
-    // Explicitly enable OS level foreground notifications
-    await messaging.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
     print('User granted permission: ${settings.authorizationStatus}');
 
     try {
@@ -372,8 +365,7 @@ class NotificationService {
   void _connectWithRetry(String userId) async {
     if (_sseDisconnectRequested) return;
     try {
-      final token = AmsGlobals.loggedInUser?.token ?? '';
-      final request = http.Request('GET', Uri.parse('$baseUrl/notifications/stream?userId=$userId&token=$token'));
+      final request = http.Request('GET', Uri.parse('$baseUrl/notifications/stream?userId=$userId'));
       final response = await request.send();
 
       _sseSubscription = response.stream.transform(utf8.decoder).listen((data) {

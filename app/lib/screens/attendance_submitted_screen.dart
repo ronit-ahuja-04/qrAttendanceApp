@@ -6,7 +6,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../routes/fade_blur_route.dart';
 import '../widgets/vesit_loader.dart';
-import '../ams/globals.dart';
 import 'faculty_main_layout.dart';
 
 class AttendanceSubmittedScreen extends StatefulWidget {
@@ -101,11 +100,13 @@ class _AttendanceSubmittedScreenState extends State<AttendanceSubmittedScreen>
     if (!mounted) return;
     setState(() => _isRedirecting = true);
 
-    await Future.delayed(const Duration(milliseconds: 300)); // Short UI transition
+    // Simulate network buffering / DB save
+    await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    
-    AmsGlobals.refreshNotifier.value++; // Trigger dashboard refresh
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).pushAndRemoveUntil(
+      FadeBlurPageRoute(page: const FacultyMainLayout()),
+      (route) => false,
+    );
   }
 
   @override

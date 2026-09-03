@@ -94,7 +94,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _fetchData() async {
-    if (_items.isEmpty) setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
       final raw = await AmsGlobals.sessionService.getNotifications(user.id);

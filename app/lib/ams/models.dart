@@ -161,7 +161,6 @@ class User {
   final String? electiveBatch;
   final String? coreBatch;
   final List<Map<String, dynamic>>? scopes;
-  final String? token;
 
   String get formattedName {
     if (role == 'faculty') {
@@ -182,79 +181,22 @@ class User {
     this.electiveBatch,
     this.coreBatch,
     this.scopes,
-    this.token,
   });
 
-  User copyWith({
-    String? id,
-    String? role,
-    String? name,
-    String? email,
-    String? rollNo,
-    String? profilePictureUrl,
-    String? branch,
-    String? division,
-    String? electiveBatch,
-    String? coreBatch,
-    List<Map<String, dynamic>>? scopes,
-    String? token,
-  }) {
-    return User(
-      id: id ?? this.id,
-      role: role ?? this.role,
-      name: name ?? this.name,
-      email: email ?? this.email,
-      rollNo: rollNo ?? this.rollNo,
-      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
-      branch: branch ?? this.branch,
-      division: division ?? this.division,
-      electiveBatch: electiveBatch ?? this.electiveBatch,
-      coreBatch: coreBatch ?? this.coreBatch,
-      scopes: scopes ?? this.scopes,
-      token: token ?? this.token,
-    );
-  }
-
   factory User.fromJson(Map<String, dynamic> json) {
-    String? pfp = json['profilePictureUrl'];
-    if (pfp != null) {
-      if (pfp.startsWith('/')) {
-        pfp = 'https://qr-attendance-api-wvvs.onrender.com$pfp';
-      } else if (pfp.contains('localhost:3000')) {
-        pfp = pfp.replaceAll('http://localhost:3000', 'https://qr-attendance-api-wvvs.onrender.com');
-      }
-    }
     return User(
       id: json['id'],
       role: json['role'],
       name: json['name'],
       email: json['email'] ?? '',
       rollNo: json['rollNo'],
-      profilePictureUrl: pfp,
+      profilePictureUrl: json['profilePictureUrl'],
       branch: json['branch'],
       division: json['division'],
       electiveBatch: json['electiveBatch'],
       coreBatch: json['coreBatch'],
       scopes: json['scopes'] != null ? List<Map<String, dynamic>>.from(json['scopes']) : null,
-      token: json['token'],
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'role': role,
-      'name': name,
-      'email': email,
-      'rollNo': rollNo,
-      'profilePictureUrl': profilePictureUrl,
-      'branch': branch,
-      'division': division,
-      'electiveBatch': electiveBatch,
-      'coreBatch': coreBatch,
-      'scopes': scopes,
-      'token': token,
-    };
   }
 }
 

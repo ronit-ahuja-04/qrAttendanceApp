@@ -4,16 +4,11 @@ const nodemailer = require('nodemailer');
 
 // Nodemailer transporter (Gmail + App Password)
 const mailer = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  service: 'gmail',
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
 });
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
@@ -23,39 +18,8 @@ const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
 const exceljs = require('exceljs');
-const helmet = require('helmet');
-const redis = require('redis');
-const { authenticateToken, generateToken } = require('./middleware/auth');
-const { apiLimiter, loginLimiter, attendanceLimiter } = require('./middleware/rateLimiter');
 const app = express();
-
-app.use(helmet());
-app.use(apiLimiter);
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:56086',
-  'https://vesit-ams.vercel.app',
-  'https://qr-attendance-app.vercel.app'
-];
-
-app.use(cors({
-  origin: function(origin, callback) {
-    if(!origin) return callback(null, true);
-    
-    // Allow any localhost port for development
-    if (origin.startsWith('http://localhost:')) {
-      return callback(null, true);
-    }
-    
-    // Allow any vercel deployment and production domains
-    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-    return callback(new Error(msg), false);
-  }
-}));
+app.use(cors());
 app.use(express.json());
 
 // Global logger
@@ -64,47 +28,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Global authentication middleware
-app.use((req, res, next) => {
-  // Allow CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return next();
-  }
-
-  const publicPaths = [
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/uploads',
-    '/profile-images'
-  ];
-  
-  if (publicPaths.some(p => req.path.startsWith(p))) {
-    return next();
-  }
-  
-  return authenticateToken(req, res, next);
-});
-
 // Initialize Firebase Admin
 const admin = require('firebase-admin');
 try {
-  let serviceAccount;
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } else if (fs.existsSync('./firebase-service-account.json')) {
-    serviceAccount = require('./firebase-service-account.json');
-  }
-
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: 'attendance-monitoring-sy-89218.firebasestorage.app'
-    });
-    console.log('Firebase Admin SDK initialized successfully.');
-  } else {
-    console.warn('Firebase Admin SDK NOT initialized. Missing credentials.');
-  }
+  const serviceAccount = require('./firebase-service-account.json');
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  console.log('Firebase Admin SDK initialized successfully.');
 } catch (e) {
   console.error('Failed to initialize Firebase Admin SDK:', e.message);
 }
@@ -214,7 +145,7 @@ cron.schedule('* * * * *', () => {
       sendPushNotification(slot.facultyId, facultyTitle, facultyBody, { type: 'TIMETABLE_UPDATED' }); // using TIMETABLE_UPDATED type to respect 'notif_alerts'
 
       // 2. Notify Students
-      db.all('SELECT id, division, coreBatch, electiveBatch FROM users WHERE role = \'student\'', [], (err, students) => {
+      db.all('SELECT id, division, coreBatch, electiveBatch FROM users WHERE role = "student"', [], (err, students) => {
         if (err || !students) return;
         
         const targetStudents = students.filter(s => {
@@ -249,9 +180,7 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer config
-const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
-
-const storage = isProduction ? multer.memoryStorage() : multer.diskStorage({
+const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -274,46 +203,13 @@ const upload = multer({
 
 let sseClients = [];
 
-let pubClient = null;
-let subClient = null;
-
-if (process.env.REDIS_URL) {
-  pubClient = redis.createClient({ url: process.env.REDIS_URL });
-  subClient = pubClient.duplicate();
-
-  pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
-  subClient.on('error', (err) => console.error('Redis Sub Error:', err));
-
-  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-    console.log('Redis connected for SSE Pub/Sub');
-    
-    subClient.subscribe('sse-events', (message) => {
-      try {
-        const { userId, event } = JSON.parse(message);
-        const data = `data: ${JSON.stringify(event)}\n\n`;
-        sseClients.forEach(client => {
-          if (!userId || client.userId === userId) {
-            client.res.write(data);
-          }
-        });
-      } catch (e) {
-        console.error('Error processing Redis message:', e);
-      }
-    });
-  }).catch(e => console.error('Failed to connect to Redis:', e));
-}
-
 function notifyClients(userId, event) {
-  if (pubClient && pubClient.isOpen) {
-    pubClient.publish('sse-events', JSON.stringify({ userId, event }));
-  } else {
-    const data = `data: ${JSON.stringify(event)}\n\n`;
-    sseClients.forEach(client => {
-      if (!userId || client.userId === userId) {
-        client.res.write(data);
-      }
-    });
-  }
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  sseClients.forEach(client => {
+    if (!userId || client.userId === userId) {
+      client.res.write(data);
+    }
+  });
 }
 
 // Utilities
@@ -321,41 +217,7 @@ function generateQrCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function formatProfilePictureUrl(url, userId) {
-  if (!url) return url;
-  
-  const baseUrl = process.env.BASE_URL || 'https://qr-attendance-api-wvvs.onrender.com';
-  
-  if (url.startsWith('data:')) {
-    return `${baseUrl}/profile-images/${userId}`;
-  } else if (url.startsWith('/uploads')) {
-    return `${baseUrl}${url}`;
-  }
-  return url;
-}
-
-app.get('/profile-images/:id', (req, res) => {
-  const userId = req.params.id;
-  db.get('SELECT profilePictureUrl FROM users WHERE id = ?', [userId], (err, row) => {
-    if (err) return res.status(500).send(err.message);
-    if (!row || !row.profilePictureUrl) {
-      return res.redirect('https://ui-avatars.com/api/?name=User&background=random');
-    }
-    const url = row.profilePictureUrl;
-    if (url.startsWith('data:')) {
-      const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (!matches || matches.length !== 3) return res.status(500).send('Invalid base64 string');
-      res.set('Content-Type', matches[1]);
-      res.send(Buffer.from(matches[2], 'base64'));
-    } else if (url.startsWith('http') || url.startsWith('/uploads')) {
-      res.redirect(url);
-    } else {
-      res.redirect('https://ui-avatars.com/api/?name=User&background=random');
-    }
-  });
-});
-
-app.post('/login', loginLimiter, (req, res) => {
+app.post('/login', (req, res) => {
   const { email, password } = req.body;
   console.log('Login attempt:', email, password);
   db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
@@ -363,7 +225,6 @@ app.post('/login', loginLimiter, (req, res) => {
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
     
     row.branch = 'INFT'; // Hardcode branch for now as per user request
-    row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
 
     if (row.role === 'faculty') {
       db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
@@ -373,65 +234,25 @@ app.post('/login', loginLimiter, (req, res) => {
         } else {
           row.scopes = scopes;
         }
-        row.token = generateToken(row);
         res.json(row);
       });
     } else {
-      row.token = generateToken(row);
       res.json(row);
     }
   });
 });
 
-app.delete('/users/:id/profile-picture', async (req, res) => {
-  const userId = req.params.id;
-  db.run(`UPDATE users SET profilePictureUrl = NULL WHERE id = ?`, [userId], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: "Profile picture removed successfully", profilePictureUrl: null });
-  });
-});
-
-app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (req, res) => {
+app.post('/users/:id/profile-picture', upload.single('profilePicture'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided or invalid format.' });
 
   const userId = req.params.id;
-  let url;
-
-  if (isProduction && admin.apps.length > 0) {
-    try {
-      const bucket = admin.storage().bucket();
-      const ext = path.extname(req.file.originalname);
-      const filename = `profiles/${uuidv4()}${ext}`;
-      const file = bucket.file(filename);
-      
-      await file.save(req.file.buffer, {
-        metadata: { contentType: req.file.mimetype },
-      });
-      
-      url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
-    } catch (e) {
-      console.error("Firebase Storage Upload Error:", e);
-      return res.status(500).json({ error: "Cloud storage upload failed." });
-    }
-  } else {
-    // Fallback: Use Base64 if memory storage was used to avoid ephemeral disk loss on Render
-    if (!req.file.filename && req.file.buffer) {
-      const base64Data = req.file.buffer.toString('base64');
-      const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
-      
-      db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [dataUri, userId], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ profilePictureUrl: formatProfilePictureUrl(dataUri, userId) });
-      });
-      return;
-    } else {
-      url = `/uploads/${req.file.filename}`;
-    }
-  }
+  // Construct absolute URL (assuming running on localhost:3000 for development)
+  // In a real app, this should dynamically use the server's host or be a relative path resolved by frontend
+  const url = `http://localhost:3000/uploads/${req.file.filename}`;
 
   db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ profilePictureUrl: formatProfilePictureUrl(url, userId) });
+    res.json({ profilePictureUrl: url });
   });
 });
 
@@ -450,20 +271,6 @@ app.get('/notifications/stream', (req, res) => {
   });
 });
 
-// Global Authentication Middleware
-app.use((req, res, next) => {
-  const publicPaths = [
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/change-password',
-    '/timetable'
-  ];
-  if (publicPaths.includes(req.path) || req.path.startsWith('/users/') || req.path.startsWith('/notifications/stream')) {
-    return next();
-  }
-  return authenticateToken(req, res, next);
-});
 
 function getSessionTargetStudents(courseCode, batchTarget) {
   let whereClause = "role = 'student'";
@@ -609,9 +416,8 @@ app.post('/sessions', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!scope) return res.status(403).json({ error: 'Scope mismatch', message: 'This faculty is not assigned to teach this subject to this batch.' });
 
-    const createSession = () => {
-      const id = uuidv4();
-      const now = new Date().toISOString();
+    const id = uuidv4();
+    const now = new Date().toISOString();
 
     let whereClause = getSessionTargetStudents(courseCode, batchTarget);
 
@@ -677,30 +483,7 @@ app.post('/sessions', (req, res) => {
           }
         );
       }
-    }); // end db.all
-  }; // end createSession
-
-    if (slotId) {
-      const todayStart = new Date();
-      todayStart.setHours(0,0,0,0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23,59,59,999);
-
-      const checkQuery = isProduction
-        ? `SELECT * FROM sessions WHERE slotId = $1 AND createdAt >= $2 AND createdAt <= $3 LIMIT 1`
-        : `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
-        
-      db.get(checkQuery, [slotId, todayStart.toISOString(), todayEnd.toISOString()], (err, existingSession) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (existingSession) {
-          // Check if session is completed, active, scheduled
-          return res.json(existingSession);
-        }
-        createSession();
-      });
-    } else {
-      createSession();
-    }
+    });
   });
 });
 
@@ -776,31 +559,6 @@ app.put('/api/sessions/:id/decline', (req, res) => {
       
       res.json({ success: true, message: 'Session declined and credit reverted to proxy successfully' });
     });
-  });
-});
-
-// 4.3) Reject Proxy Session
-app.put('/api/sessions/:id/reject', (req, res) => {
-  const { id } = req.params;
-  db.run(`UPDATE sessions SET approvalStatus = 'rejected' WHERE id = ?`, [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Session not found' });
-    
-    db.get('SELECT proxyFacultyId, courseCode, facultyId FROM sessions WHERE id = ?', [id], (err, row) => {
-      if (row && row.proxyFacultyId) {
-        db.get('SELECT name FROM users WHERE id = ?', [row.facultyId], (err, fac) => {
-           const facName = fac ? fac.name : row.facultyId;
-           const now = new Date().toISOString();
-           const title = 'Proxy Rejected';
-           const body = `${facName} rejected your proxy session for ${row.courseCode}.`;
-           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-             [uuidv4(), row.proxyFacultyId, title, body, 'Rejected', 'errorContainer', 'onErrorContainer', facName, 'cancel', now]);
-           sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_REJECTED' });
-        });
-      }
-    });
-    
-    res.json({ success: true, message: 'Session rejected successfully' });
   });
 });
 
@@ -898,7 +656,7 @@ app.get('/api/sessions/today/all', (req, res) => {
   startOfDay.setHours(0, 0, 0, 0);
   
   db.all(
-    `SELECT courseCode, batchTarget, facultyId, proxyFacultyId, status, slotId FROM sessions WHERE createdAt >= ?`,
+    `SELECT courseCode, batchTarget, facultyId, proxyFacultyId, status FROM sessions WHERE createdAt >= ?`,
     [startOfDay.toISOString()],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -909,9 +667,8 @@ app.get('/api/sessions/today/all', (req, res) => {
 
 
 // 9) Mark Attendance
-app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res) => {
-  const { sessionId, code } = req.body;
-  const studentId = req.user.id; // SECURE: Extracted from verified JWT, cannot be spoofed!
+app.post('/api/attendance/mark', (req, res) => {
+  const { sessionId, studentId, code } = req.body;
 
   db.all('SELECT * FROM sessions WHERE id = ? OR groupId = ?', [sessionId, sessionId], (err, sessions) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -939,14 +696,25 @@ app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res
     let anyError = null;
 
     // We can insert records for all matched sessions
+    const checkCompletion = () => {
+      if (insertCount + duplicateCount === matchedSessions.length) {
+        if (insertCount === 0 && duplicateCount > 0) {
+           return res.status(400).json({ error: 'duplicateAttendance', message: 'Attendance already marked.' });
+        }
+        res.json({
+          success: true,
+          message: 'Attendance marked successfully.'
+        });
+      }
+    };
+
     matchedSessions.forEach(session => {
       const aid = uuidv4();
       db.run('INSERT INTO attendance_records (id, sessionId, studentId, markedAt, status, method) VALUES (?, ?, ?, ?, ?, ?)',
         [aid, session.id, studentId, markedAt, 'pending', 'qr'],
         function (err) {
           if (err) {
-            // Support both SQLite ('UNIQUE') and Postgres ('duplicate key' or 'unique') error formats
-            if (err.message.includes('UNIQUE') || err.message.toLowerCase().includes('unique') || err.message.toLowerCase().includes('duplicate key')) {
+            if (err.message.includes('UNIQUE')) {
               duplicateCount++;
             } else {
               anyError = err;
@@ -957,24 +725,7 @@ app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res
           if (anyError && insertCount + duplicateCount === matchedSessions.length) {
              return res.status(500).json({ error: anyError.message });
           }
-          
-          if (insertCount + duplicateCount === matchedSessions.length) {
-            if (insertCount === 0 && duplicateCount > 0) {
-               return res.status(400).json({ error: 'duplicateAttendance', message: 'Attendance already marked.' });
-            }
-            res.json({
-              success: true,
-              message: 'Attendance marked successfully.',
-              record: {
-                id: aid,
-                sessionId: session.id,
-                studentId: studentId,
-                markedAt: markedAt,
-                status: 'pending',
-                method: 'qr'
-              }
-            });
-          }
+          checkCompletion();
         }
       );
     });
@@ -1047,14 +798,6 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
                sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
            });
         }
-        
-        // Notify the faculty who actually submitted the attendance
-        const submitterId = session.proxyFacultyId || session.facultyId;
-        const submitterTitle = 'Attendance Submitted';
-        const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
-        db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
-        sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
 
         res.json({ success: true, message: 'Attendance finalized successfully.' });
       });
@@ -1150,7 +893,7 @@ app.get('/api/report/excel/:id', (req, res) => {
         });
 
         // 3. Fetch Student details (Ordered by rollNo ascending numerically)
-        db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY rollNo ASC`, enrolledIds, async (err, students) => {
+        db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, enrolledIds, async (err, students) => {
           if (err) return res.status(500).json({ error: err.message });
 
           const workbook = new exceljs.Workbook();
@@ -1250,7 +993,7 @@ app.get('/api/report/bulk-excel', (req, res) => {
     const placeholders = studentIdsArr.map(() => '?').join(',');
 
     // 3. Fetch student details (Ordered by rollNo ascending numerically)
-    db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY rollNo ASC`, studentIdsArr, (err, students) => {
+    db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, studentIdsArr, (err, students) => {
       if (err) return res.status(500).json({ error: err.message });
 
       // 4. Fetch all attendance records for these sessions
@@ -1344,66 +1087,53 @@ app.get('/api/report/bulk-excel', (req, res) => {
 
 
 
-// Reset tokens are now stored in the database.
+// In-memory store for reset tokens { token -> { email, expiry } }
+const resetTokens = {};
+
 // POST /forgot-password — verifies email exists, returns a 6-digit reset code
 app.post('/forgot-password', (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  db.get(`SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)`, [email], (err, row) => {
+  db.get(`SELECT id, email FROM users WHERE email = ?`, [email], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'No account found with this email' });
 
     // Generate a 6-digit OTP
     const token = Math.floor(100000 + Math.random() * 900000).toString();
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
-    let expiryDate;
-    
-    if (isProduction) {
-      // Postgres TIMESTAMP expects 'YYYY-MM-DD HH:MM:SS' or ISO string
-      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    } else {
-      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    }
+    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    resetTokens[token] = { email: row.email, expiry };
 
-    // First delete any existing token for this email to avoid duplicate primary key on retry
-    db.run(`DELETE FROM reset_tokens WHERE LOWER(email) = LOWER(?)`, [row.email], (delErr) => {
-      // Insert new token
-      db.run(`INSERT INTO reset_tokens (token, email, expiry) VALUES (?, ?, ?)`, [token, row.email, expiryDate], (insertErr) => {
-        if (insertErr) return res.status(500).json({ error: 'Failed to generate reset token' });
-
-        // Send real OTP email
-        const mailOptions = {
-          from: `"AMS – Attendance System" <${process.env.MAIL_USER}>`,
-          to: row.email,
-          subject: 'Your AMS Password Reset Code',
-          html: `
-            <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
-              <div style="background:#002147;padding:24px;text-align:center">
-                <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
-                <p style="color:#fff;margin:4px 0 0;font-size:13px">Attendance Management System</p>
-              </div>
-              <div style="padding:28px">
-                <p style="font-size:15px;color:#333">Hi there,</p>
-                <p style="font-size:15px;color:#333">Use the code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-                <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
-                  <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#002147">${token}</span>
-                </div>
-                <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
-              </div>
+    // Send real OTP email
+    const mailOptions = {
+      from: `"AMS – Attendance System" <${process.env.MAIL_USER}>`,
+      to: row.email,
+      subject: 'Your AMS Password Reset Code',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+          <div style="background:#002147;padding:24px;text-align:center">
+            <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
+            <p style="color:#fff;margin:4px 0 0;font-size:13px">Attendance Management System</p>
+          </div>
+          <div style="padding:28px">
+            <p style="font-size:15px;color:#333">Hi there,</p>
+            <p style="font-size:15px;color:#333">Use the code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+            <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
+              <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#002147">${token}</span>
             </div>
-          `,
-        };
+            <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        </div>
+      `,
+    };
 
-        mailer.sendMail(mailOptions, (mailErr) => {
-          if (mailErr) {
-            console.error('[MAIL ERROR]', mailErr);
-            return res.status(500).json({ error: 'Failed to send reset email. Check server mail config.' });
-          }
-          console.log(`[RESET] OTP sent to ${email}`);
-          res.json({ message: 'Reset code sent to your email' }); // token NOT returned in prod
-        });
-      });
+    mailer.sendMail(mailOptions, (mailErr) => {
+      if (mailErr) {
+        console.error('[MAIL ERROR]', mailErr);
+        return res.status(500).json({ error: 'Failed to send reset email. Check server mail config.' });
+      }
+      console.log(`[RESET] OTP sent to ${email}`);
+      res.json({ message: 'Reset code sent to your email' }); // token NOT returned in prod
     });
   });
 });
@@ -1413,21 +1143,17 @@ app.post('/reset-password', (req, res) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
 
-  db.get(`SELECT * FROM reset_tokens WHERE token = ?`, [token], (err, record) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!record) return res.status(400).json({ error: 'Invalid or expired reset code' });
-    
-    if (new Date() > new Date(record.expiry)) {
-      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]);
-      return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
-    }
+  const record = resetTokens[token];
+  if (!record) return res.status(400).json({ error: 'Invalid or expired reset code' });
+  if (Date.now() > record.expiry) {
+    delete resetTokens[token];
+    return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+  }
 
-    db.run(`UPDATE users SET password = ? WHERE LOWER(email) = LOWER(?)`, [newPassword, record.email], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      
-      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]); // Single-use token
-      res.json({ message: 'Password updated successfully' });
-    });
+  db.run(`UPDATE users SET password = ? WHERE email = ?`, [newPassword, record.email], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    delete resetTokens[token]; // Single-use token
+    res.json({ message: 'Password updated successfully' });
   });
 });
 
@@ -1581,12 +1307,11 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
 });
 
 function notifyTimetableUpdate(facultyId, subject, batchTarget) {
-  setTimeout(() => {
-    db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
-      if (err || !faculty) return;
+  db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
+    if (err || !faculty) return;
     const facultyName = faculty.name;
 
-    db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role=\'student\'', [], (err, students) => {
+    db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role="student"', [], (err, students) => {
       if (err) return;
       students.forEach(student => {
         const { id: studentId, division, coreBatch, electiveSubject, electiveBatch } = student;
@@ -1619,8 +1344,7 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget) {
         }
       });
     });
-    });
-  }, 1000);
+  });
 }
 
 function calculateEndTime(startTime, type) {
@@ -1640,47 +1364,32 @@ function calculateEndTime(startTime, type) {
   return `${h.toString().padStart(2, '0')}:${m}`;
 }
 
-
-function parseTimeStr(tStr) {
-  if (!tStr) return 0;
-  const parts = tStr.trim().split(' ');
-  const hm = parts[0].split(':').map(Number);
-  let hr = hm[0] || 0;
-  const min = hm[1] || 0;
-  if (parts.length > 1) {
-    const ampm = parts[1].toUpperCase();
-    if (ampm === 'PM' && hr < 12) hr += 12;
-    if (ampm === 'AM' && hr === 12) hr = 0;
-  }
-  return hr * 60 + min;
-}
-
 function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, excludeId, callback) {
   db.all('SELECT ts.*, u.name as facultyName FROM timetable_slots ts JOIN users u ON ts.facultyId = u.id WHERE ts.day = ?', [day], (err, slots) => {
     if (err) return callback(err, null);
     
-    const newStart = parseTimeStr(startTime);
-    const newEnd = parseTimeStr(endTime);
+    const [nH, nM] = startTime.split(':').map(Number);
+    const [neH, neM] = endTime.split(':').map(Number);
+    const newStart = nH * 60 + nM;
+    const newEnd = neH * 60 + neM;
 
     for (const slot of slots) {
       if (excludeId && slot.id === excludeId) continue;
       
-      const st = slot.startTime || '00:00';
-      const et = slot.endTime || '00:00';
-      const slotStart = parseTimeStr(st);
-      const slotEnd = parseTimeStr(et);
+      const [sH, sM] = slot.startTime.split(':').map(Number);
+      const [eH, eM] = slot.endTime.split(':').map(Number);
+      const slotStart = sH * 60 + sM;
+      const slotEnd = eH * 60 + eM;
       
       const overlaps = Math.max(newStart, slotStart) < Math.min(newEnd, slotEnd);
       
       if (overlaps) {
         if (slot.facultyId === facultyId) {
-           return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${st} (Venue: ${slot.venue}).`);
+           return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${slot.startTime} (Venue: ${slot.venue}).`);
         }
         
-        const bTarget = batchTarget || '';
-        const sBatchTarget = slot.batchTarget || '';
-        const parts1 = bTarget.split(' - ');
-        const parts2 = sBatchTarget.split(' - ');
+        const parts1 = batchTarget.split(' - ');
+        const parts2 = slot.batchTarget.split(' - ');
         if (parts1.length === 2 && parts2.length === 2) {
           const div1 = parts1[0]; const sub1 = parts1[1];
           const div2 = parts2[0]; const sub2 = parts2[1];
@@ -1694,14 +1403,6 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
     callback(null, null); // No overlap
   });
 }
-
-// GET all timetable slots (used by Timetable Manager)
-app.get('/api/timetable', (req, res) => {
-  db.all('SELECT * FROM timetable_slots', (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
 
 // POST new timetable slot
 app.post('/api/timetable', (req, res) => {
@@ -1780,18 +1481,12 @@ app.get('/timetable', (req, res) => {
 app.get('/timetable/:facultyId', (req, res) => {
   const facultyId = req.params.facultyId;
   const today = new Date().toISOString().split('T')[0];
-  const todayStart = `${today} 00:00:00`;
-  const todayEnd = `${today} 23:59:59`;
 
   db.all(`SELECT * FROM timetable_slots WHERE facultyId = ?`, [facultyId], (err, slots) => {
     if (err) return res.status(500).json({ error: err.message });
 
     // Fetch today's sessions for this faculty to prevent duplicate QR generation
-    const checkQuery = isProduction
-      ? `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = $1 AND createdAt >= $2 AND createdAt <= $3`
-      : `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
-
-    db.all(checkQuery, [facultyId, todayStart, todayEnd], (err, sessions) => {
+    db.all(`SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND date(createdAt) = ?`, [facultyId, today], (err, sessions) => {
       if (err) return res.status(500).json({ error: err.message });
       
       const enrichedSlots = slots.map(slot => {
@@ -1943,12 +1638,9 @@ app.get('/api/attendance/student/:studentId/stats', (req, res) => {
   });
 });
 
-if (require.main === module) {
-  app.listen(3000, () => {
-    console.log('Server running on port 3000');
-  });
-}
-module.exports = app;
+app.listen(3000, () => {
+  console.log('Backend listening on port 3000');
+});
 
 function handleSmartSeminarAttendance(req, res, session, userId, method) {
   const meta = JSON.parse(session.metadata || '{}');

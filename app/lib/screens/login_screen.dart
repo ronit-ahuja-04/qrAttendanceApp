@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/vesit_widgets.dart';
 import '../widgets/vesit_loader.dart';
-import '../ams/models.dart';
 import 'faculty_main_layout.dart';
 import 'student_main_layout.dart';
 import 'change_password_screen.dart';
@@ -16,7 +13,6 @@ import '../ams/notification_service.dart';
 import '../routes/fade_blur_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui';
 
 class LoginScreen extends StatefulWidget {
@@ -29,8 +25,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String _role = kIsWeb ? 'faculty' : 'student';
+  final _passwordController = TextEditingController(text: 'pass123');
+  String _role = 'student';
   bool _isLoading = false;
 
   @override
@@ -60,16 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user.role != _role) {
         if (!mounted) return;
         setState(() => _isLoading = false);
-        String errorMessage;
-        if (kIsWeb && user.role == 'student') {
-          errorMessage = 'Access Restricted: This web portal is exclusively designated for faculty use. Students must utilize the official mobile application to access their accounts.';
-        } else {
-          errorMessage = 'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!';
-        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              errorMessage,
+              'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!',
               style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
             ),
             backgroundColor: context.colors.vesitGold,
@@ -84,8 +74,6 @@ class _LoginScreenState extends State<LoginScreen> {
       AmsGlobals.loggedInUser = user;
       
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('ams_user_session', jsonEncode(user.toJson()));
-      
       final pushEnabled = prefs.getBool('notif_master') ?? true;
       
       if (pushEnabled) {
@@ -279,14 +267,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                       curve: Curves.easeOut,
                                       height: isKeyboardOpen ? 12 : 24,
                                     ),
-                                    if (!kIsWeb)
-                                      VesitRoleToggle(
-                                        value: _role,
-                                        onChanged: (r) => setState(() => _role = r),
-                                      ),
-                                    if (!kIsWeb)
-                                      AnimatedContainer(
-                                        duration: const Duration(milliseconds: 300),
+                                    VesitRoleToggle(
+                                      value: _role,
+                                      onChanged: (r) => setState(() => _role = r),
+                                    ),
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
                                       curve: Curves.easeOut,
                                       height: isKeyboardOpen ? 12 : 24,
                                     ),

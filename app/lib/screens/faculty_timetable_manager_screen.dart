@@ -48,7 +48,6 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
             AmsGlobals.timetableSlots.clear();
             AmsGlobals.timetableSlots.addAll(updatedSlots);
             _sortSlots();
-            AmsGlobals.refreshNotifier.value++;
           });
           if (mounted) {
             VesitToast.show(context: context, title: 'Timetable slot added successfully!', type: ToastType.info);
@@ -140,7 +139,6 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
                               AmsGlobals.timetableSlots.clear();
                               AmsGlobals.timetableSlots.addAll(updatedSlots);
                               _sortSlots();
-            AmsGlobals.refreshNotifier.value++;
                             });
                             
                             if (mounted) {
@@ -191,7 +189,6 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
             AmsGlobals.timetableSlots.clear();
             AmsGlobals.timetableSlots.addAll(refreshedSlots);
             _sortSlots();
-            AmsGlobals.refreshNotifier.value++;
           });
           if (mounted) {
             VesitToast.show(context: context, title: 'Timetable slot updated!', type: ToastType.info);
@@ -410,8 +407,8 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   
   late String _day;
   String _subject = '';
-  String _type = 'Lecture';
-  String _batch = 'Unknown Batch';
+  String _type = '';
+  String _batch = '';
   
   final _venueController = TextEditingController();
 
@@ -429,28 +426,25 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       _subject = slot['subject'] ?? _subjects.first;
       if (!_subjects.contains(_subject)) _subject = _subjects.first;
       
-      _type = slot['type'] ?? 'Lecture';
-      _batch = slot['batchTarget'] ?? 'Unknown Batch';
-
       _updateDependentDropdowns();
+
+      _type = slot['type'] ?? _types.first;
+      if (!_types.contains(_type)) _type = _types.first;
+      
+      _batch = slot['batchTarget'] ?? _batches.first;
+      if (!_batches.contains(_batch)) _batch = _batches.first;
       
       _venueController.text = slot['venue'] ?? '';
       _startTime = _parseTime(slot['startTime'] ?? '09:00 AM');
       _endTime = _parseTime(slot['endTime'] ?? '10:30 AM');
-    } else {
-      final now = DateTime.now();
-      _startTime = TimeOfDay(hour: now.hour, minute: 0);
-      int endHour = now.hour + 1;
-      if (_type == 'Lab') endHour = now.hour + 2;
-      _endTime = TimeOfDay(hour: endHour % 24, minute: 0);
     }
   }
 
   void _initScopes() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
     if (scopes.isNotEmpty) {
-      _subjects = scopes.map((s) => s['subject']?.toString() ?? 'Unknown Subject').toSet().toList()..sort();
-      _subject = _subjects.isNotEmpty ? _subjects.first : 'Unknown Subject';
+      _subjects = scopes.map((s) => s['subject'] as String).toSet().toList()..sort();
+      _subject = _subjects.isNotEmpty ? _subjects.first : '';
       _updateDependentDropdowns();
     }
     if (_subjects.isEmpty) _subjects = ['Unknown Subject'];
@@ -462,7 +456,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
     
     if (subjectScopes.isNotEmpty) {
-      _types = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet().toList()..sort();
+      _types = subjectScopes.map((s) => s['type'] as String).toSet().toList()..sort();
       if (!_types.contains(_type)) _type = _types.isNotEmpty ? _types.first : 'Lecture';
       
       _updateBatchesForType();
@@ -479,7 +473,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
     
     if (validScopes.isNotEmpty) {
-      _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? 'Unknown Batch').toSet().toList()..sort();
+      _batches = validScopes.map((s) => s['batchTarget'] as String).toSet().toList()..sort();
       if (!_batches.contains(_batch)) {
         if (_type.toLowerCase() == 'lecture') {
           // Prefer 'All' for lectures
