@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import 'models.dart';
 
@@ -13,9 +14,57 @@ class AmsGlobals {
   static String? activeSessionId;
   /// Global list of timetable slots shared between the Manager and the Dashboard.
   static final List<Map<String, dynamic>> timetableSlots = [];
+  /// Global list of faculty sessions to cache the data and enable instant dashboard loading.
+  static final List<AttendanceSession> facultySessions = [];
+
+  /// Global caching for student dashboard
+  static List<Map<String, dynamic>> studentTimetableSlots = [];
+  static Map<String, dynamic>? studentStats;
+
+  /// Helper for loading dialogs
+  static Future<void> runWithLoading(BuildContext context, Future<void> Function() action) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await action();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
 
   /// Global notifier for ThemeMode (Light/Dark)
-  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+
+  static Future<void> initTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('isDarkTheme');
+    if (isDark != null) {
+      themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+    } else {
+      themeNotifier.value = ThemeMode.system;
+    }
+  }
+
+  static Future<void> setTheme(ThemeMode mode) async {
+    themeNotifier.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    if (mode == ThemeMode.dark) {
+      await prefs.setBool('isDarkTheme', true);
+    } else if (mode == ThemeMode.light) {
+      await prefs.setBool('isDarkTheme', false);
+    } else {
+      await prefs.remove('isDarkTheme');
+    }
+  }
+
+  static final ValueNotifier<int> refreshNotifier = ValueNotifier(0);
+  
+  static String? userRole;
 
   /// Helper to generate consistent colors based on Batch/Division
   static Color getBatchColor(String batch) {
@@ -76,6 +125,9 @@ class AmsGlobals {
     final lowerName = rawName.toLowerCase().replaceAll('prof.', '').trim();
     if (lowerName == 'pn') return 'Pooja Nagdev';
     if (lowerName == 'ps') return 'Pooja Shetty';
+    if (lowerName == 'sso') return 'Shanta S.';
+    if (lowerName == 'dk') return 'Dipti Karani';
+    if (lowerName == 'sy') return 'Smita Jangale';
     
     // Standard formatting (removing 'Prof.', capitalizing words)
     final parts = rawName.split(' ').where((s) => s.isNotEmpty).toList();

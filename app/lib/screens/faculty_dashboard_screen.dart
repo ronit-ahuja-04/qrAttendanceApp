@@ -59,10 +59,10 @@ class FacultyDashboardScreen extends StatefulWidget {
 }
 
 class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
-  bool _isLoading = true;
+  bool _isLoading = AmsGlobals.timetableSlots.isEmpty || AmsGlobals.facultySessions.isEmpty;
   StreamSubscription? _eventSub;
   List<AttendanceSession> _pendingSessions = [];
-  List<AttendanceSession> _allSessions = [];
+  List<AttendanceSession> _allSessions = List.from(AmsGlobals.facultySessions);
   Timer? _refreshTimer;
 
   @override
@@ -77,18 +77,28 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+    AmsGlobals.refreshNotifier.addListener(_onGlobalRefresh);
+  }
+
+  void _onGlobalRefresh() {
+    if (mounted) {
+      setState(() {});
+      _loadTimetable();
+    }
   }
 
   @override
   void dispose() {
     _eventSub?.cancel();
     _refreshTimer?.cancel();
+    AmsGlobals.refreshNotifier.removeListener(_onGlobalRefresh);
     super.dispose();
   }
 
   Future<void> _loadTimetable() async {
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
+      if (mounted && _allSessions.isEmpty) setState(() => _isLoading = true);
       final slots = await ApiSessionService().getTimetable(user.id);
       final sessions = await ApiSessionService().getFacultySessions(user.id);
       final pending =
@@ -97,6 +107,8 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
         setState(() {
           AmsGlobals.timetableSlots.clear();
           AmsGlobals.timetableSlots.addAll(slots);
+          AmsGlobals.facultySessions.clear();
+          AmsGlobals.facultySessions.addAll(sessions);
           _pendingSessions = pending;
           _allSessions = sessions;
           _isLoading = false;
@@ -106,6 +118,8 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -161,9 +175,9 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _FacultyProfileBlock(isLoading: _isLoading),
+                          _FacultyProfileBlock(),
                           const SizedBox(height: 40),
-                          _SidebarMenu(isLoading: _isLoading),
+                          _SidebarMenu(onRefresh: _loadTimetable),
                         ],
                       ),
                     ),
@@ -237,15 +251,19 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
             }
 
             // Mobile Layout (Single Column)
-            return SingleChildScrollView(
-              controller: widget.scrollController,
-              child: Column(
+            return RefreshIndicator(
+              onRefresh: _loadTimetable,
+              color: context.colors.vesitPrimary,
+              child: SingleChildScrollView(
+                controller: widget.scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
                 children: [
                   Container(
                     color: context.colors.vesitWhite,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
-                    child: _FacultyProfileCompact(isLoading: _isLoading, onTap: widget.onProfileTap),
+                    child: _FacultyProfileCompact(onTap: widget.onProfileTap),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
@@ -308,6 +326,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                   ),
                 ],
               ),
+             ),
             );
           },
         ),
@@ -370,26 +389,12 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
 }
 
 class _FacultyProfileBlock extends StatelessWidget {
-  const _FacultyProfileBlock({required this.isLoading});
-  final bool isLoading;
+  const _FacultyProfileBlock();
 
   @override
   Widget build(BuildContext context) {
     final userName = AmsGlobals.loggedInUser?.formattedName ?? 'John Smith';
     final userEmail = AmsGlobals.loggedInUser?.email ?? 'faculty@ves.ac.in';
-
-    if (isLoading) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          VesitSkeleton(width: 80, height: 80, borderRadius: 40),
-          SizedBox(height: 24),
-          VesitSkeleton(width: 200, height: 32),
-          SizedBox(height: 8),
-          VesitSkeleton(width: 150, height: 20),
-        ],
-      );
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,31 +424,13 @@ class _FacultyProfileBlock extends StatelessWidget {
 }
 
 class _FacultyProfileCompact extends StatelessWidget {
-  const _FacultyProfileCompact({required this.isLoading, this.onTap});
-  final bool isLoading;
+  const _FacultyProfileCompact({this.onTap});
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final userName = AmsGlobals.loggedInUser?.formattedName ?? 'John Smith';
     final userEmail = AmsGlobals.loggedInUser?.email ?? 'faculty@ves.ac.in';
-
-    if (isLoading) {
-      return const Row(
-        children: [
-          VesitSkeleton(width: 56, height: 56, borderRadius: 28),
-          SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              VesitSkeleton(width: 150, height: 20),
-              SizedBox(height: 4),
-              VesitSkeleton(width: 100, height: 14),
-            ],
-          ),
-        ],
-      );
-    }
 
     return GestureDetector(
       onTap: onTap,
@@ -488,22 +475,11 @@ class _FacultyProfileCompact extends StatelessWidget {
 }
 
 class _SidebarMenu extends StatelessWidget {
-  const _SidebarMenu({required this.isLoading});
-  final bool isLoading;
+  const _SidebarMenu({required this.onRefresh});
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return Column(
-        children: List.generate(
-            4,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 48, borderRadius: 8),
-                )),
-      );
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -511,8 +487,12 @@ class _SidebarMenu extends StatelessWidget {
         _SidebarMenuItem(
           icon: Icons.settings,
           title: 'Profile & Settings',
-          onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const FacultyProfileScreen())),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const FacultyProfileScreen()),
+            );
+            onRefresh();
+          },
         ),
         const SizedBox(height: 16),
         _SidebarMenuItem(
@@ -896,9 +876,29 @@ class _UpcomingSessionsList extends StatelessWidget {
                           // The proxy hasn't submitted yet. Let the original faculty override it.
                           continue;
                         }
-                        sessionExistsToday = true;
-                        existingSession = s;
-                        break;
+                        
+                        // Check if session was created on the matching day
+                        final sessionDate = s.createdAt;
+                        bool isYesterdaySlot = false;
+                        final sDay = session['day'] as String?;
+                        if (sDay != null) {
+                          final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                          final todayIndex = now.weekday - 1;
+                          final idx = dayNamesList.indexOf(sDay);
+                          if (idx >= 0) {
+                            if (todayIndex == 0 && idx == 6) isYesterdaySlot = true;
+                            else if (idx == todayIndex - 1) isYesterdaySlot = true;
+                          }
+                        }
+                        final targetDate = isYesterdaySlot ? now.subtract(const Duration(days: 1)) : now;
+                        
+                        if (sessionDate.year == targetDate.year && 
+                            sessionDate.month == targetDate.month && 
+                            sessionDate.day == targetDate.day) {
+                          sessionExistsToday = true;
+                          existingSession = s;
+                          break;
+                        }
                       }
                     }
 
@@ -1104,23 +1104,21 @@ class _UpcomingSessionsList extends StatelessWidget {
                       );
                     }
 
-                    if (end != null && now.isAfter(end)) {
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: context.colors.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
+
+
+                    if (session['_hasSession'] == true) {
+                      return ElevatedButton(
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledForegroundColor: Colors.grey.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Text(
-                          'Session Ended',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: context.colors.onSurfaceVariant,
-                          ),
-                        ),
+                        child: const Text('Session attendance marked successfully',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
                       );
                     }
 
@@ -1134,7 +1132,7 @@ class _UpcomingSessionsList extends StatelessWidget {
                               sessionSubtitle:
                                   '${session['venue'] ?? ''} • ${_formatTimeString(session['startTime'] as String? ?? '')} - ${_formatTimeString(session['endTime'] as String? ?? '')} • Div: ${session['batchTarget'] ?? ''}',
                               batchTarget: targetBatch,
-                              slotId: session['id'],
+                              slotId: session['id'] ?? session['_id'],
                             ),
                           ),
                         );
@@ -1167,76 +1165,76 @@ class _UpcomingSessionsList extends StatelessWidget {
       return Column(
         children: List.generate(
             2,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 80, borderRadius: 12),
-                )),
+            (index) => const _SessionCardSkeleton()),
       );
     }
 
     final now = DateTime.now();
-    final dayNames = {
-      1: 'Mon',
-      2: 'Tue',
-      3: 'Wed',
-      4: 'Thu',
-      5: 'Fri',
-      6: 'Sat',
-      7: 'Sun'
-    };
-    final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final todayIndex = now.weekday - 1;
+    final currentDayStr = DateFormat('EEE').format(now); // e.g. "Thu"
+
+    final todaySessions = allSessions.where((s) {
+      final sDate = s.createdAt;
+      return sDate.year == now.year && sDate.month == now.month && sDate.day == now.day;
+    }).toList();
 
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
-      final slotDayStr = s['day'] as String?;
-      if (slotDayStr == null) return false;
+      if (s['day'] != currentDayStr) return false;
 
-      final slotDayIndex = dayNamesList.indexOf(slotDayStr);
-      if (slotDayIndex < 0) return false;
-
-      bool isToday = slotDayIndex == todayIndex;
-      bool isYesterday = false;
-      if (todayIndex == 0 && slotDayIndex == 6)
-        isYesterday = true;
-      else if (slotDayIndex == todayIndex - 1) isYesterday = true;
-
-      if (!isToday && !isYesterday) return false;
-
-      final startTimeStr = s['startTime'] as String?;
-      final endTimeStr = s['endTime'] as String?;
-      if (endTimeStr == null || startTimeStr == null) return true;
-      try {
-        final startParts = startTimeStr.split(':');
-        final endParts = endTimeStr.split(':');
-        final startHour = int.parse(startParts[0]);
-        final endHour = int.parse(endParts[0]);
-        final endMin = int.parse(endParts[1]);
-
-        DateTime endDateTime =
-            DateTime(now.year, now.month, now.day, endHour, endMin);
-        if (isYesterday) {
-          endDateTime = endDateTime.subtract(const Duration(days: 1));
-        }
-        if (endHour < startHour) {
-          endDateTime = endDateTime.add(const Duration(days: 1));
-        }
-
-        // If the session ended before 'now', it shouldn't be in Upcoming anymore
-        // UNLESS it's from yesterday and still running!
-        if (endDateTime.isBefore(now)) return false;
-
-        return true;
-      } catch (e) {
-        return true;
+      final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
+      final eParts = endTimeStrRaw.split(':');
+      if (eParts.length == 2) {
+        final eHour = int.tryParse(eParts[0]) ?? 0;
+        final eMin = int.tryParse(eParts[1]) ?? 0;
+        final endDateTime = DateTime(now.year, now.month, now.day, eHour, eMin);
+        if (now.isAfter(endDateTime)) return false;
       }
+
+      return true;
+    }).map((s) {
+      bool hasSession = false;
+      SessionStatus? existingStatus;
+      for (var ts in todaySessions) {
+        final slotId = s['id'] ?? s['_id'];
+        if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
+          if (ts.slotId == slotId) {
+            hasSession = true;
+            existingStatus = ts.status;
+            break;
+          }
+        } else {
+          // Fallback for older sessions without slotId
+          final subject = s['subject'] as String? ?? '';
+          if (subject.isNotEmpty && ts.courseCode.contains(subject) && ts.batchTarget == s['batchTarget']) {
+            hasSession = true;
+            existingStatus = ts.status;
+            break;
+          }
+        }
+      }
+      return {
+        ...s, 
+        '_hasSession': hasSession, 
+        '_existingStatus': existingStatus
+      };
     }).toList();
 
     // Sort them by time for the dashboard
     todaySlots.sort((a, b) {
       final tA = a['startTime'] as String? ?? '00:00';
       final tB = b['startTime'] as String? ?? '00:00';
-      return tA.compareTo(tB);
+      
+      // Parse hour and minute for accurate sorting (e.g. 9:00 vs 10:00)
+      final partsA = tA.split(':');
+      final partsB = tB.split(':');
+      
+      final hA = partsA.isNotEmpty ? (int.tryParse(partsA[0]) ?? 0) : 0;
+      final mA = partsA.length > 1 ? (int.tryParse(partsA[1]) ?? 0) : 0;
+      
+      final hB = partsB.isNotEmpty ? (int.tryParse(partsB[0]) ?? 0) : 0;
+      final mB = partsB.length > 1 ? (int.tryParse(partsB[1]) ?? 0) : 0;
+      
+      if (hA != hB) return hA.compareTo(hB);
+      return mA.compareTo(mB);
     });
 
     if (todaySlots.isEmpty) {
@@ -1264,34 +1262,17 @@ class _UpcomingSessionsList extends StatelessWidget {
         final startTimeStr = _formatTimeString(startTimeStrRaw);
         final endTimeStr = _formatTimeString(endTimeStrRaw);
 
-        bool isYesterday = false;
-        final sDay = session['day'] as String?;
-        if (sDay != null) {
-          final idx = dayNamesList.indexOf(sDay);
-          if (idx >= 0) {
-            if (todayIndex == 0 && idx == 6)
-              isYesterday = true;
-            else if (idx == todayIndex - 1) isYesterday = true;
-          }
-        }
-
         String statusText = 'Scheduled';
         try {
           final sParts = startTimeStrRaw.split(':');
           final sHour = int.parse(sParts[0]);
           final sMin = int.parse(sParts[1]);
           var sDateTime = DateTime(now.year, now.month, now.day, sHour, sMin);
-          if (isYesterday) {
-            sDateTime = sDateTime.subtract(const Duration(days: 1));
-          }
 
           final eParts = endTimeStrRaw.split(':');
           final eHour = int.parse(eParts[0]);
           final eMin = int.parse(eParts[1]);
           var eDateTime = DateTime(now.year, now.month, now.day, eHour, eMin);
-          if (isYesterday) {
-            eDateTime = eDateTime.subtract(const Duration(days: 1));
-          }
 
           if (eDateTime.isBefore(sDateTime)) {
             eDateTime = eDateTime.add(const Duration(days: 1));
@@ -1299,14 +1280,25 @@ class _UpcomingSessionsList extends StatelessWidget {
 
           final diff = sDateTime.difference(now);
 
-          if (now.isAfter(eDateTime)) {
-            statusText = 'Completed';
-          } else if (diff.isNegative) {
-            statusText = 'Running now';
-          } else if (diff.inHours > 0) {
-            statusText = 'In ${diff.inHours} hr ${diff.inMinutes % 60} min';
+          if (session['_hasSession'] == true) {
+             final st = session['_existingStatus'];
+             if (st == SessionStatus.active) {
+               statusText = 'Live';
+             } else if (st == SessionStatus.scheduled) {
+               statusText = 'Scheduled';
+             } else {
+               statusText = 'Completed';
+             }
           } else {
-            statusText = 'In ${diff.inMinutes} mins';
+            if (now.isAfter(eDateTime)) {
+              statusText = 'Completed';
+            } else if (diff.isNegative) {
+              statusText = 'Running now';
+            } else if (diff.inHours > 0) {
+              statusText = 'In ${diff.inHours} hr ${diff.inMinutes % 60} min';
+            } else {
+              statusText = 'In ${diff.inMinutes} mins';
+            }
           }
         } catch (e) {
           // Fallback to Scheduled
@@ -1318,7 +1310,7 @@ class _UpcomingSessionsList extends StatelessWidget {
             date: 'Today',
             time: '$startTimeStr - $endTimeStr',
             venue: session['venue'] as String? ?? 'TBA',
-            course: session['subject'] as String,
+            course: session['subject'] as String? ?? 'Unknown',
             students: 60, // Placeholder, will come from backend
             status: statusText,
             isUpcoming: true,
@@ -1368,11 +1360,7 @@ class _RecentSessionsList extends StatelessWidget {
       return Column(
         children: List.generate(
             3,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 80, borderRadius: 12),
-                )),
+            (index) => const _SessionCardSkeleton()),
       );
     }
 
@@ -1419,17 +1407,34 @@ class _RecentSessionsList extends StatelessWidget {
             isProxiedBySomeoneElse: isPendingProxy,
             onTap: () {},
             actionLabel: isPendingProxy
-                ? 'Proxied'
+                ? 'Approve'
                 : (session.status == SessionStatus.active ? 'Force Close' : 'View Report'),
-            onAction: isPendingProxy ? null : () async {
-              if (session.status == SessionStatus.active) {
-                await AmsGlobals.sessionService.closeSession(session.id);
-                onRefresh();
-              } else {
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ReportDetailScreen(session: session)));
-              }
-            },
+            onAction: isPendingProxy
+                ? () async {
+                    await AmsGlobals.runWithLoading(context, () async {
+                      await AmsGlobals.sessionService.approveProxySession(session.id);
+                      onRefresh();
+                    });
+                  }
+                : () async {
+                    if (session.status == SessionStatus.active) {
+                      await AmsGlobals.runWithLoading(context, () async {
+                        await AmsGlobals.sessionService.closeSession(session.id);
+                        onRefresh();
+                      });
+                    } else {
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => ReportDetailScreen(session: session)));
+                    }
+                  },
+            onReject: isPendingProxy
+                ? () async {
+                    await AmsGlobals.runWithLoading(context, () async {
+                      await AmsGlobals.sessionService.rejectProxySession(session.id);
+                      onRefresh();
+                    });
+                  }
+                : null,
           ),
         );
       }).toList(),
@@ -1450,7 +1455,8 @@ class _SessionTile extends StatefulWidget {
       this.isProxiedBySomeoneElse = false,
       this.onTap,
       this.actionLabel = 'View Report',
-      this.onAction});
+      this.onAction,
+      this.onReject});
   final String date;
   final String time;
   final String venue;
@@ -1463,6 +1469,7 @@ class _SessionTile extends StatefulWidget {
   final VoidCallback? onTap;
   final String actionLabel;
   final VoidCallback? onAction;
+  final VoidCallback? onReject;
 
   @override
   State<_SessionTile> createState() => _SessionTileState();
@@ -1741,31 +1748,106 @@ class _SessionTileState extends State<_SessionTile> {
                 ),
                 if (widget.onAction != null) ...[
                   Divider(height: 1, color: Colors.grey.shade200),
-                  InkWell(
-                    onTap: widget.onAction,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: widget.isUpcoming 
-                            ? context.colors.vesitGold.withValues(alpha: 0.1)
-                            : context.colors.vesitPrimary.withValues(alpha: 0.05),
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(16),
-                          bottomRight: Radius.circular(16),
+                  if (widget.onReject != null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: widget.onAction,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: context.colors.vesitPrimary.withValues(alpha: 0.1),
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(16),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_circle, size: 16, color: context.colors.vesitPrimary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.actionLabel,
+                                    style: context.textStyles.vesitLabelBold.copyWith(
+                                        color: context.colors.vesitPrimary,
+                                        fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.actionLabel,
-                        style: context.textStyles.vesitLabelBold.copyWith(
+                        Container(width: 1, height: 40, color: Colors.grey.shade300),
+                        Expanded(
+                          child: InkWell(
+                            onTap: widget.onReject,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: context.colors.vesitOrange.withValues(alpha: 0.1),
+                                borderRadius: const BorderRadius.only(
+                                  bottomRight: Radius.circular(16),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.cancel, size: 16, color: context.colors.vesitOrange),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Reject',
+                                    style: context.textStyles.vesitLabelBold.copyWith(
+                                        color: context.colors.vesitOrange,
+                                        fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    InkWell(
+                      onTap: widget.onAction,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
                           color: widget.isUpcoming 
-                              ? context.colors.vesitGold
-                              : context.colors.vesitPrimary,
+                              ? context.colors.vesitGold.withValues(alpha: 0.1)
+                              : context.colors.vesitPrimary.withValues(alpha: 0.1),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              widget.isUpcoming 
+                                  ? Icons.stop_circle 
+                                  : Icons.analytics, 
+                              size: 16, 
+                              color: widget.isUpcoming 
+                                  ? context.colors.vesitGold 
+                                  : context.colors.vesitPrimary
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              widget.actionLabel,
+                              style: context.textStyles.vesitLabelBold.copyWith(
+                                  color: widget.isUpcoming 
+                                      ? context.colors.vesitGold 
+                                      : context.colors.vesitPrimary,
+                                  fontSize: 13),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
                 ],
               ],
             ),
@@ -1854,6 +1936,52 @@ class _ProfileAvatar extends StatelessWidget {
         style: context.textStyles.vesitHeadlineMd.copyWith(
             color: context.colors.vesitWhite,
             fontSize: size * 0.4),
+      ),
+    );
+  }
+}
+
+class _SessionCardSkeleton extends StatelessWidget {
+  const _SessionCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const VesitSkeleton(width: 48, height: 48, borderRadius: 12),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    VesitSkeleton(width: 150, height: 20, borderRadius: 4),
+                    SizedBox(height: 8),
+                    VesitSkeleton(width: 100, height: 16, borderRadius: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const VesitSkeleton(width: double.infinity, height: 48, borderRadius: 12),
+        ],
       ),
     );
   }

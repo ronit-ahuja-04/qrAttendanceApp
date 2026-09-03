@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.DS_Store
+app/build
+app/.dart_tool
+app/.pub-cache
+app/.fvm
+backend/node_modules
+faculty-web/node_modules

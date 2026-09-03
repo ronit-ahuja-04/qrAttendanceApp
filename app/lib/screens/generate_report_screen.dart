@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -186,6 +188,36 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _fetchReport() async {
     final list = await AmsGlobals.sessionService.getVerificationList(widget.session.id);
+    
+    // Sort alphanumerically by roll number
+    int compareAlphanumeric(String a, String b) {
+      final regExp = RegExp(r'(\d+|\D+)');
+      final aMatches = regExp.allMatches(a).map((m) => m.group(0)!).toList();
+      final bMatches = regExp.allMatches(b).map((m) => m.group(0)!).toList();
+      
+      for (int i = 0; i < aMatches.length && i < bMatches.length; i++) {
+        final aPart = aMatches[i];
+        final bPart = bMatches[i];
+        
+        final aInt = int.tryParse(aPart);
+        final bInt = int.tryParse(bPart);
+        
+        if (aInt != null && bInt != null) {
+          final comp = aInt.compareTo(bInt);
+          if (comp != 0) return comp;
+        } else {
+          final comp = aPart.compareTo(bPart);
+          if (comp != 0) return comp;
+        }
+      }
+      return aMatches.length.compareTo(bMatches.length);
+    }
+    
+    list.sort((a, b) => compareAlphanumeric(
+      (a['rollNo'] ?? '').toString(),
+      (b['rollNo'] ?? '').toString(),
+    ));
+
     if (mounted) {
       setState(() {
         _students = list;
@@ -196,23 +228,51 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _exportToLockedExcel() async {
     try {
-      final url = '$baseUrl/api/report/excel/${widget.session.id}';
+      final prefs = await SharedPreferences.getInstance();
+      final sessionJson = prefs.getString('ams_user_session');
+      String token = '';
+      if (sessionJson != null) {
+        try {
+          token = jsonDecode(sessionJson)['token'] ?? '';
+        } catch(e) {}
+      }
+      final url = '$baseUrl/api/report/excel/${widget.session.id}?token=$token';
+      
       
       if (kIsWeb) {
-        // Web download logic
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", 'Report_${widget.session.courseCode}.xlsx')
-          ..target = '_blank'
-          ..click();
+        // Web download logic with Blob to hide token
+        final response = await httpClient.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: blobUrl)
+            ..setAttribute("download", 'Report_${widget.session.courseCode}.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
           
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Report downloaded successfully')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Report downloaded successfully')),
+            );
+          }
+        } else {
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       } else {
+
         // Mobile/Desktop logic
-        final response = await http.get(Uri.parse(url));
+        final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
           final filename = 'Report_${widget.session.courseCode}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
@@ -228,7 +288,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           }
           OpenFile.open(path);
         } else {
-          throw Exception('Failed to download from server');
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       }
     } catch (e) {

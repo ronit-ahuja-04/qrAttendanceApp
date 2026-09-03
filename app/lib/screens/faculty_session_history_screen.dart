@@ -24,7 +24,7 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
   }
 
   Future<void> _loadHistory() async {
-    setState(() => _isLoading = true);
+    if (_sessions.isEmpty) setState(() => _isLoading = true);
     final allSessions = await AmsGlobals.sessionService.getFacultySessions(AmsGlobals.loggedInUser!.id);
     
     // Only show completed sessions in history

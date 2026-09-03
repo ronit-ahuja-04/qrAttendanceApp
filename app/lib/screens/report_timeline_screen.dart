@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -77,26 +79,53 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
       final subject = Uri.encodeComponent(widget.subject);
       final batchTarget = Uri.encodeComponent(widget.batchTarget);
       
-      final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end';
+      final prefs = await SharedPreferences.getInstance();
+      final sessionJson = prefs.getString('ams_user_session');
+      String token = '';
+      if (sessionJson != null) {
+        try {
+          token = jsonDecode(sessionJson)['token'] ?? '';
+        } catch(e) {}
+      }
+      final url = '$baseUrl/api/report/bulk-excel?facultyId=$facultyId&subject=$subject&batchTarget=$batchTarget&startDate=$start&endDate=$end&token=$token';
+      
       
       if (kIsWeb) {
-        // Web download logic
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", 'BulkReport_${widget.subject}.xlsx')
-          ..target = '_blank'
-          ..click();
+        // Web download logic with Blob to hide token
+        final response = await httpClient.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: blobUrl)
+            ..setAttribute("download", 'BulkReport_${widget.subject}.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
           
-        if (mounted) {
-          VesitToast.show(
-            context: context,
-            title: 'Success',
-            description: 'Report downloaded successfully',
-            type: ToastType.success,
-          );
+          if (mounted) {
+            VesitToast.show(
+              context: context,
+              title: 'Success',
+              description: 'Report downloaded successfully',
+              type: ToastType.success,
+            );
+          }
+        } else {
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       } else {
         // Mobile/Desktop logic
-        final response = await http.get(Uri.parse(url));
+        final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
           final filename = 'BulkReport_${widget.subject}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
