@@ -101,7 +101,7 @@ class _GlobalConfigureSessionScreenState
 
   Future<void> _fetchAllSlots() async {
     try {
-      final res = await httpClient.get(Uri.parse('$baseUrl/timetable'));
+      final res = await httpClient.get(Uri.parse('$baseUrl/api/timetable'));
       final activeRes = await httpClient.get(Uri.parse('$baseUrl/api/sessions/today/all'));
       
       if (res.statusCode == 200) {
