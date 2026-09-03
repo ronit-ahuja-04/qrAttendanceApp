@@ -48,6 +48,7 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
             AmsGlobals.timetableSlots.clear();
             AmsGlobals.timetableSlots.addAll(updatedSlots);
             _sortSlots();
+            AmsGlobals.refreshNotifier.value++;
           });
           if (mounted) {
             VesitToast.show(context: context, title: 'Timetable slot added successfully!', type: ToastType.info);
@@ -139,6 +140,7 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
                               AmsGlobals.timetableSlots.clear();
                               AmsGlobals.timetableSlots.addAll(updatedSlots);
                               _sortSlots();
+            AmsGlobals.refreshNotifier.value++;
                             });
                             
                             if (mounted) {
@@ -189,6 +191,7 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
             AmsGlobals.timetableSlots.clear();
             AmsGlobals.timetableSlots.addAll(refreshedSlots);
             _sortSlots();
+            AmsGlobals.refreshNotifier.value++;
           });
           if (mounted) {
             VesitToast.show(context: context, title: 'Timetable slot updated!', type: ToastType.info);

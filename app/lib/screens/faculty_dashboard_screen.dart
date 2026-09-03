@@ -77,12 +77,18 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+    AmsGlobals.refreshNotifier.addListener(_onGlobalRefresh);
+  }
+
+  void _onGlobalRefresh() {
+    if (mounted) _loadTimetable();
   }
 
   @override
   void dispose() {
     _eventSub?.cancel();
     _refreshTimer?.cancel();
+    AmsGlobals.refreshNotifier.removeListener(_onGlobalRefresh);
     super.dispose();
   }
 
@@ -163,7 +169,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                         children: [
                           _FacultyProfileBlock(isLoading: _isLoading),
                           const SizedBox(height: 40),
-                          _SidebarMenu(isLoading: _isLoading),
+                          _SidebarMenu(isLoading: _isLoading, onRefresh: _loadTimetable),
                         ],
                       ),
                     ),
@@ -493,8 +499,9 @@ class _FacultyProfileCompact extends StatelessWidget {
 }
 
 class _SidebarMenu extends StatelessWidget {
-  const _SidebarMenu({required this.isLoading});
+  const _SidebarMenu({required this.isLoading, required this.onRefresh});
   final bool isLoading;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -516,8 +523,12 @@ class _SidebarMenu extends StatelessWidget {
         _SidebarMenuItem(
           icon: Icons.settings,
           title: 'Profile & Settings',
-          onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const FacultyProfileScreen())),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const FacultyProfileScreen()),
+            );
+            onRefresh();
+          },
         ),
         const SizedBox(height: 16),
         _SidebarMenuItem(

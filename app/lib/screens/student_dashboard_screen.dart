@@ -133,6 +133,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         _fetchData();
       }
     });
+    AmsGlobals.refreshNotifier.addListener(_onGlobalRefresh);
+  }
+
+  void _onGlobalRefresh() {
+    if (mounted) _fetchData();
   }
 
   @override
@@ -140,6 +145,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     _animController.dispose();
     _timer?.cancel();
     _eventSub?.cancel();
+    AmsGlobals.refreshNotifier.removeListener(_onGlobalRefresh);
     super.dispose();
   }
 

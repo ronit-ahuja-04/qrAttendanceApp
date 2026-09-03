@@ -15,7 +15,10 @@ class AmsGlobals {
   static final List<Map<String, dynamic>> timetableSlots = [];
 
   /// Global notifier for ThemeMode (Light/Dark)
-  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+  static final ValueNotifier<int> refreshNotifier = ValueNotifier(0);
+  
+  static String? userRole;
 
   /// Helper to generate consistent colors based on Batch/Division
   static Color getBatchColor(String batch) {

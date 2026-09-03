@@ -74,9 +74,12 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                     _SettingsButton(
                       icon: Icons.calendar_month_outlined,
                       label: 'Manage Timetable',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const FacultyTimetableManagerScreen()),
-                      ),
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const FacultyTimetableManagerScreen()),
+                        );
+                        _refresh();
+                      },
                     ),
                   if (user?.role != 'student') const SizedBox(height: 12),
                   _SettingsButton(

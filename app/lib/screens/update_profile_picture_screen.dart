@@ -43,6 +43,7 @@ class _UpdateProfilePictureScreenState extends State<UpdateProfilePictureScreen>
       final updatedUser = await AmsGlobals.sessionService.uploadProfilePicture(user.id, _selectedFile!);
       if (updatedUser != null) {
         AmsGlobals.loggedInUser = updatedUser;
+        AmsGlobals.refreshNotifier.value++;
         if (mounted) {
           VesitToast.show(context: context, title: 'Profile picture updated successfully!', type: ToastType.info);
           Navigator.of(context).maybePop(true);
