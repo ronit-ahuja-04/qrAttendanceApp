@@ -429,17 +429,20 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       _subject = slot['subject'] ?? _subjects.first;
       if (!_subjects.contains(_subject)) _subject = _subjects.first;
       
-      _updateDependentDropdowns();
+      _type = slot['type'] ?? 'Lecture';
+      _batch = slot['batchTarget'] ?? 'Unknown Batch';
 
-      _type = slot['type'] ?? _types.first;
-      if (!_types.contains(_type)) _type = _types.first;
-      
-      _batch = slot['batchTarget'] ?? _batches.first;
-      if (!_batches.contains(_batch)) _batch = _batches.first;
+      _updateDependentDropdowns();
       
       _venueController.text = slot['venue'] ?? '';
       _startTime = _parseTime(slot['startTime'] ?? '09:00 AM');
       _endTime = _parseTime(slot['endTime'] ?? '10:30 AM');
+    } else {
+      final now = DateTime.now();
+      _startTime = TimeOfDay(hour: now.hour, minute: 0);
+      int endHour = now.hour + 1;
+      if (_type == 'Lab') endHour = now.hour + 2;
+      _endTime = TimeOfDay(hour: endHour % 24, minute: 0);
     }
   }
 
