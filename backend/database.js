@@ -130,6 +130,61 @@ if (isProduction) {
     }
   });
   console.log("Using SQLite In-Memory Database for testing.");
+} else if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+  const { createClient } = require('@libsql/client');
+  const client = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+
+  db = {
+    serialize: (cb) => cb(),
+    run: function (sql, params, callback) {
+      if (typeof params === 'function') { callback = params; params = []; }
+      client.execute({ sql, args: params || [] })
+        .then(res => { if (callback) callback.call({ changes: res.rowsAffected, lastID: res.lastInsertRowid ? res.lastInsertRowid.toString() : null }, null); })
+        .catch(err => { if (callback) callback.call({ changes: 0 }, err); else console.error('Turso run error:', err); });
+      return this;
+    },
+    get: function (sql, params, callback) {
+      if (typeof params === 'function') { callback = params; params = []; }
+      client.execute({ sql, args: params || [] })
+        .then(res => { if (callback) callback(null, res.rows.length > 0 ? res.rows[0] : null); })
+        .catch(err => { if (callback) callback(err, null); else console.error('Turso get error:', err); });
+      return this;
+    },
+    all: function (sql, params, callback) {
+      if (typeof params === 'function') { callback = params; params = []; }
+      client.execute({ sql, args: params || [] })
+        .then(res => { if (callback) callback(null, res.rows); })
+        .catch(err => { if (callback) callback(err, null); else console.error('Turso all error:', err); });
+      return this;
+    },
+    prepare: function (sql) {
+      // Stub for prepare if ever used, but safely degrades to normal run
+      return {
+        run: function (...args) {
+          let callback = null;
+          if (args.length > 0 && typeof args[args.length - 1] === 'function') {
+            callback = args.pop();
+          }
+          let params = args;
+          if (args.length === 1 && Array.isArray(args[0])) {
+            params = args[0];
+          }
+          client.execute({ sql, args: params }).then(res => {
+            if (callback) callback.call({ changes: res.rowsAffected }, null);
+          }).catch(err => {
+            if (callback) callback.call({ changes: 0 }, err);
+            else console.error('Turso prepare run error:', err);
+          });
+          return this;
+        },
+        finalize: function (cb) { if (cb) cb(null); }
+      };
+    }
+  };
+  console.log("Using Turso (LibSQL) Cloud Database.");
 } else {
   const sqlite3 = require('sqlite3').verbose();
   db = new sqlite3.Database('./database.sqlite', (err) => {
