@@ -56,7 +56,7 @@ app.use(cors({
     return callback(new Error(msg), false);
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'ngrok-skip-browser-warning', 'x-requested-with', 'Accept']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'ngrok-skip-browser-warning', 'x-requested-with', 'Accept', 'Cache-Control', 'Pragma', 'Expires']
 }));
 app.use(express.json());
 
