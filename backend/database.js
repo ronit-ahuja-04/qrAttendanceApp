@@ -124,11 +124,23 @@ if (isProduction) {
   console.log("Using PostgreSQL Database wrapper.");
 } else if (process.env.NODE_ENV === 'test') {
   const sqlite3 = require('sqlite3').verbose();
-  db = new sqlite3.Database(':memory:');
+  db = new sqlite3.Database(':memory:', (err) => {
+    if (!err) {
+      db.run('PRAGMA busy_timeout = 5000;');
+    }
+  });
   console.log("Using SQLite In-Memory Database for testing.");
 } else {
   const sqlite3 = require('sqlite3').verbose();
-  db = new sqlite3.Database('./database.sqlite');
+  db = new sqlite3.Database('./database.sqlite', (err) => {
+    if (err) {
+      console.error("Failed to connect to SQLite:", err.message);
+    } else {
+      db.run('PRAGMA busy_timeout = 5000;');
+      db.run('PRAGMA journal_mode = WAL;');
+      db.run('PRAGMA busy_timeout = 5000;');
+    }
+  });
   console.log("Using SQLite Local Database.");
 }
 
