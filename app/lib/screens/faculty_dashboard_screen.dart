@@ -1189,15 +1189,31 @@ class _UpcomingSessionsList extends StatelessWidget {
 
       return true;
     }).map((s) {
-      final hasSession = todaySessions.any((ts) {
+      bool hasSession = false;
+      SessionStatus? existingStatus;
+      for (var ts in todaySessions) {
         final slotId = s['id'] ?? s['_id'];
         if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
-          return ts.slotId == slotId;
+          if (ts.slotId == slotId) {
+            hasSession = true;
+            existingStatus = ts.status;
+            break;
+          }
+        } else {
+          // Fallback for older sessions without slotId
+          final subject = s['subject'] as String? ?? '';
+          if (subject.isNotEmpty && ts.courseCode.contains(subject) && ts.batchTarget == s['batchTarget']) {
+            hasSession = true;
+            existingStatus = ts.status;
+            break;
+          }
         }
-        final subject = s['subject'] as String? ?? '';
-        return subject.isNotEmpty && ts.courseCode.contains(subject) && ts.batchTarget == s['batchTarget'];
-      });
-      return {...s, '_hasSession': hasSession};
+      }
+      return {
+        ...s, 
+        '_hasSession': hasSession, 
+        '_existingStatus': existingStatus
+      };
     }).toList();
 
     // Sort them by time for the dashboard
@@ -1262,14 +1278,25 @@ class _UpcomingSessionsList extends StatelessWidget {
 
           final diff = sDateTime.difference(now);
 
-          if (now.isAfter(eDateTime)) {
-            statusText = 'Completed';
-          } else if (diff.isNegative) {
-            statusText = 'Running now';
-          } else if (diff.inHours > 0) {
-            statusText = 'In ${diff.inHours} hr ${diff.inMinutes % 60} min';
+          if (slot['_hasSession'] == true) {
+             final st = slot['_existingStatus'];
+             if (st == SessionStatus.active) {
+               statusText = 'Live';
+             } else if (st == SessionStatus.scheduled) {
+               statusText = 'Scheduled';
+             } else {
+               statusText = 'Completed';
+             }
           } else {
-            statusText = 'In ${diff.inMinutes} mins';
+            if (now.isAfter(eDateTime)) {
+              statusText = 'Completed';
+            } else if (diff.isNegative) {
+              statusText = 'Running now';
+            } else if (diff.inHours > 0) {
+              statusText = 'In ${diff.inHours} hr ${diff.inMinutes % 60} min';
+            } else {
+              statusText = 'In ${diff.inMinutes} mins';
+            }
           }
         } catch (e) {
           // Fallback to Scheduled

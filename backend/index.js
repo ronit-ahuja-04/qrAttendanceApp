@@ -898,7 +898,7 @@ app.get('/api/sessions/today/all', (req, res) => {
   startOfDay.setHours(0, 0, 0, 0);
   
   db.all(
-    `SELECT courseCode, batchTarget, facultyId, proxyFacultyId, status FROM sessions WHERE createdAt >= ?`,
+    `SELECT courseCode, batchTarget, facultyId, proxyFacultyId, status, slotId FROM sessions WHERE createdAt >= ?`,
     [startOfDay.toISOString()],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
