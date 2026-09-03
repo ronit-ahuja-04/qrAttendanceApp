@@ -1212,8 +1212,12 @@ app.get('/api/report/excel/:id', (req, res) => {
           await workbook.xlsx.write(res);
           res.end();
         });
-      });
-    });
+  });
+});
+
+app.get('/api/debug/sessions', (req, res) => {
+  db.all('SELECT id, facultyId, proxyFacultyId, courseCode, batchTarget, createdAt FROM sessions ORDER BY createdAt DESC LIMIT 50', [], (err, rows) => {
+    res.json(rows);
   });
 });
 
