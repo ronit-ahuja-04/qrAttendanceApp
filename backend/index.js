@@ -4,11 +4,16 @@ const nodemailer = require('nodemailer');
 
 // Nodemailer transporter (Gmail + App Password)
 const mailer = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
 });
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
