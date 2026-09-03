@@ -6,7 +6,8 @@ import '../widgets/vesit_widgets.dart';
 import 'session_calendar_screen.dart';
 import 'student_dashboard_screen.dart';
 import '../ams/globals.dart';
-
+import 'dart:async';
+import '../services/notification_service.dart';
 enum _AttendanceStatus { present, missed }
 
 class _AttendanceEntry {
@@ -56,10 +57,23 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   int _attendedCount = 0;
   int _missedCount = 0;
 
+  StreamSubscription? _notificationSub;
+
   @override
   void initState() {
     super.initState();
     _loadHistory();
+    _notificationSub = NotificationService.instance.onNotification.listen((event) {
+      if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED'].contains(event['type'])) {
+        _loadHistory();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {

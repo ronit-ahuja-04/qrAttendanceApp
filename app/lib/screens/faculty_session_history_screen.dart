@@ -5,7 +5,8 @@ import '../theme/app_text_styles.dart';
 import '../ams/globals.dart';
 import '../ams/models.dart';
 import 'generate_report_screen.dart';
-
+import 'dart:async';
+import '../services/notification_service.dart';
 class FacultySessionHistoryScreen extends StatefulWidget {
   const FacultySessionHistoryScreen({super.key});
 
@@ -17,10 +18,23 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
   bool _isLoading = true;
   List<AttendanceSession> _sessions = [];
 
+  StreamSubscription? _notificationSub;
+
   @override
   void initState() {
     super.initState();
     _loadHistory();
+    _notificationSub = NotificationService.instance.onNotification.listen((event) {
+      if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED'].contains(event['type'])) {
+        _loadHistory();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
