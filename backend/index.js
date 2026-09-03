@@ -54,7 +54,9 @@ app.use(cors({
     
     const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
     return callback(new Error(msg), false);
-  }
+  },
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'ngrok-skip-browser-warning', 'x-requested-with', 'Accept']
 }));
 app.use(express.json());
 
