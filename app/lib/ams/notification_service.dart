@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../screens/notifications_screen.dart';
-import '../screens/faculty_notifications_screen.dart';
 import '../theme/app_colors.dart';
 import 'api_services.dart';
 import 'globals.dart';
@@ -163,11 +162,7 @@ class NotificationService {
       if (context == null) return;
       
       try {
-        if (AmsGlobals.loggedInUser?.isFaculty == true) {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultyNotificationsScreen()));
-        } else {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-        }
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
       } catch (e) {
         print('Error handling notification tap: $e');
       }

@@ -7,7 +7,7 @@ import 'session_calendar_screen.dart';
 import 'student_dashboard_screen.dart';
 import '../ams/globals.dart';
 import 'dart:async';
-import '../services/notification_service.dart';
+import '../ams/notification_service.dart';
 enum _AttendanceStatus { present, missed }
 
 class _AttendanceEntry {
@@ -63,7 +63,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   void initState() {
     super.initState();
     _loadHistory();
-    _notificationSub = NotificationService.instance.onNotification.listen((event) {
+    _notificationSub = NotificationService().events.listen((event) {
       if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED'].contains(event['type'])) {
         _loadHistory();
       }

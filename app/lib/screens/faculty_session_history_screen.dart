@@ -6,7 +6,7 @@ import '../ams/globals.dart';
 import '../ams/models.dart';
 import 'generate_report_screen.dart';
 import 'dart:async';
-import '../services/notification_service.dart';
+import '../ams/notification_service.dart';
 class FacultySessionHistoryScreen extends StatefulWidget {
   const FacultySessionHistoryScreen({super.key});
 
@@ -24,7 +24,7 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
   void initState() {
     super.initState();
     _loadHistory();
-    _notificationSub = NotificationService.instance.onNotification.listen((event) {
+    _notificationSub = NotificationService().events.listen((event) {
       if (['TIMETABLE_UPDATED', 'ATTENDANCE_UPDATED'].contains(event['type'])) {
         _loadHistory();
       }
