@@ -509,6 +509,16 @@ class ApiSessionService {
     }
   }
 
+  Future<bool> rejectProxySession(String sessionId) async {
+    try {
+      final response = await httpClient.put(Uri.parse('$baseUrl/api/sessions/$sessionId/reject'));
+      return response.statusCode == 200;
+    } catch (e) {
+      print('REJECT SESSION ERROR: $e');
+      return false;
+    }
+  }
+
   Future<bool> declineProxySession(String sessionId) async {
     try {
       final response = await httpClient.put(Uri.parse('$baseUrl/api/sessions/$sessionId/decline'));

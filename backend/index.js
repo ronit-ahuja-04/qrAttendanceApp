@@ -774,6 +774,31 @@ app.put('/api/sessions/:id/decline', (req, res) => {
   });
 });
 
+// 4.3) Reject Proxy Session
+app.put('/api/sessions/:id/reject', (req, res) => {
+  const { id } = req.params;
+  db.run(`UPDATE sessions SET approvalStatus = 'rejected' WHERE id = ?`, [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Session not found' });
+    
+    db.get('SELECT proxyFacultyId, courseCode, facultyId FROM sessions WHERE id = ?', [id], (err, row) => {
+      if (row && row.proxyFacultyId) {
+        db.get('SELECT name FROM users WHERE id = ?', [row.facultyId], (err, fac) => {
+           const facName = fac ? fac.name : row.facultyId;
+           const now = new Date().toISOString();
+           const title = 'Proxy Rejected';
+           const body = `${facName} rejected your proxy session for ${row.courseCode}.`;
+           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             [uuidv4(), row.proxyFacultyId, title, body, 'Rejected', 'errorContainer', 'onErrorContainer', facName, 'cancel', now]);
+           sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_REJECTED' });
+        });
+      }
+    });
+    
+    res.json({ success: true, message: 'Session rejected successfully' });
+  });
+});
+
 // 5) Rotate QR Code
 app.post('/api/sessions/:id/rotate-qr', (req, res) => {
   const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);

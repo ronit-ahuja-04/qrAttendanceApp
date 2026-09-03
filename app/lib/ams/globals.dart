@@ -103,7 +103,7 @@ class AmsGlobals {
     final lowerName = rawName.toLowerCase().replaceAll('prof.', '').trim();
     if (lowerName == 'pn') return 'Pooja Nagdev';
     if (lowerName == 'ps') return 'Pooja Shetty';
-    if (lowerName == 'sso') return 'Sharmila Sengupta';
+    if (lowerName == 'sso') return 'Shanta S.';
     if (lowerName == 'dk') return 'Dipti Karani';
     if (lowerName == 'sy') return 'Smita Jangale';
     

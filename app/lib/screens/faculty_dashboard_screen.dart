@@ -1208,7 +1208,12 @@ class _UpcomingSessionsList extends StatelessWidget {
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
       if (s['day'] != currentDayStr) return false;
       
-      final hasSession = todaySessions.any((ts) => ts.courseCode == s['subject'] && ts.batchTarget == s['batchTarget']);
+      final hasSession = todaySessions.any((ts) {
+        if (ts.slotId != null && ts.slotId!.isNotEmpty) {
+          return ts.slotId == s['id'];
+        }
+        return ts.courseCode.contains(s['subject']) && ts.batchTarget == s['batchTarget'];
+      });
       if (hasSession) return false;
 
       final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
@@ -1393,17 +1398,28 @@ class _RecentSessionsList extends StatelessWidget {
             isProxiedBySomeoneElse: isPendingProxy,
             onTap: () {},
             actionLabel: isPendingProxy
-                ? 'Proxied'
+                ? 'Approve'
                 : (session.status == SessionStatus.active ? 'Force Close' : 'View Report'),
-            onAction: isPendingProxy ? null : () async {
-              if (session.status == SessionStatus.active) {
-                await AmsGlobals.sessionService.closeSession(session.id);
-                onRefresh();
-              } else {
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ReportDetailScreen(session: session)));
-              }
-            },
+            onAction: isPendingProxy
+                ? () async {
+                    await AmsGlobals.sessionService.approveProxySession(session.id);
+                    onRefresh();
+                  }
+                : () async {
+                    if (session.status == SessionStatus.active) {
+                      await AmsGlobals.sessionService.closeSession(session.id);
+                      onRefresh();
+                    } else {
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => ReportDetailScreen(session: session)));
+                    }
+                  },
+            onReject: isPendingProxy
+                ? () async {
+                    await AmsGlobals.sessionService.rejectProxySession(session.id);
+                    onRefresh();
+                  }
+                : null,
           ),
         );
       }).toList(),
@@ -1437,6 +1453,7 @@ class _SessionTile extends StatefulWidget {
   final VoidCallback? onTap;
   final String actionLabel;
   final VoidCallback? onAction;
+  final VoidCallback? onReject;
 
   @override
   State<_SessionTile> createState() => _SessionTileState();
@@ -1715,31 +1732,106 @@ class _SessionTileState extends State<_SessionTile> {
                 ),
                 if (widget.onAction != null) ...[
                   Divider(height: 1, color: Colors.grey.shade200),
-                  InkWell(
-                    onTap: widget.onAction,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: widget.isUpcoming 
-                            ? context.colors.vesitGold.withValues(alpha: 0.1)
-                            : context.colors.vesitPrimary.withValues(alpha: 0.05),
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(16),
-                          bottomRight: Radius.circular(16),
+                  if (widget.onReject != null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: widget.onAction,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: context.colors.vesitPrimary.withValues(alpha: 0.1),
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(16),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_circle, size: 16, color: context.colors.vesitPrimary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.actionLabel,
+                                    style: context.textStyles.vesitLabelBold.copyWith(
+                                        color: context.colors.vesitPrimary,
+                                        fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.actionLabel,
-                        style: context.textStyles.vesitLabelBold.copyWith(
+                        Container(width: 1, height: 40, color: Colors.grey.shade300),
+                        Expanded(
+                          child: InkWell(
+                            onTap: widget.onReject,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: context.colors.vesitOrange.withValues(alpha: 0.1),
+                                borderRadius: const BorderRadius.only(
+                                  bottomRight: Radius.circular(16),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.cancel, size: 16, color: context.colors.vesitOrange),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Reject',
+                                    style: context.textStyles.vesitLabelBold.copyWith(
+                                        color: context.colors.vesitOrange,
+                                        fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    InkWell(
+                      onTap: widget.onAction,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
                           color: widget.isUpcoming 
-                              ? context.colors.vesitGold
-                              : context.colors.vesitPrimary,
+                              ? context.colors.vesitGold.withValues(alpha: 0.1)
+                              : context.colors.vesitPrimary.withValues(alpha: 0.1),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              widget.isUpcoming 
+                                  ? Icons.stop_circle 
+                                  : Icons.analytics, 
+                              size: 16, 
+                              color: widget.isUpcoming 
+                                  ? context.colors.vesitGold 
+                                  : context.colors.vesitPrimary
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              widget.actionLabel,
+                              style: context.textStyles.vesitLabelBold.copyWith(
+                                  color: widget.isUpcoming 
+                                      ? context.colors.vesitGold 
+                                      : context.colors.vesitPrimary,
+                                  fontSize: 13),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
                 ],
               ],
             ),
