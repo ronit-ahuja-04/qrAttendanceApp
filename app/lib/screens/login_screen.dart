@@ -60,10 +60,16 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user.role != _role) {
         if (!mounted) return;
         setState(() => _isLoading = false);
+        String errorMessage;
+        if (kIsWeb && user.role == 'student') {
+          errorMessage = 'Access Restricted: This web portal is exclusively designated for faculty use. Students must utilize the official mobile application to access their accounts.';
+        } else {
+          errorMessage = 'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!',
+              errorMessage,
               style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
             ),
             backgroundColor: context.colors.vesitGold,
