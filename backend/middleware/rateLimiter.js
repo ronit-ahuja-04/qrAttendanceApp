@@ -20,7 +20,18 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Strict Attendance Rate Limiter
+// Max 10 attempts per minute to prevent brute forcing QR codes
+const attendanceLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { error: 'tooManyAttendanceAttempts', message: 'Too many attendance attempts from this IP, please try again after 1 minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 module.exports = {
   apiLimiter,
-  loginLimiter
+  loginLimiter,
+  attendanceLimiter
 };

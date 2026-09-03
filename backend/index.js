@@ -19,13 +19,30 @@ const path = require('path');
 const fs = require('fs');
 const exceljs = require('exceljs');
 const helmet = require('helmet');
+const redis = require('redis');
 const { authenticateToken, generateToken } = require('./middleware/auth');
-const { apiLimiter, loginLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, loginLimiter, attendanceLimiter } = require('./middleware/rateLimiter');
 const app = express();
 
 app.use(helmet());
 app.use(apiLimiter);
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:56086',
+  'https://vesit-ams.vercel.app',
+  'https://qr-attendance-app.vercel.app'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if(!origin) return callback(null, true);
+    if(allowedOrigins.indexOf(origin) === -1){
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+}));
 app.use(express.json());
 
 // Global logger
@@ -244,13 +261,46 @@ const upload = multer({
 
 let sseClients = [];
 
+let pubClient = null;
+let subClient = null;
+
+if (process.env.REDIS_URL) {
+  pubClient = redis.createClient({ url: process.env.REDIS_URL });
+  subClient = pubClient.duplicate();
+
+  pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
+  subClient.on('error', (err) => console.error('Redis Sub Error:', err));
+
+  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    console.log('Redis connected for SSE Pub/Sub');
+    
+    subClient.subscribe('sse-events', (message) => {
+      try {
+        const { userId, event } = JSON.parse(message);
+        const data = `data: ${JSON.stringify(event)}\n\n`;
+        sseClients.forEach(client => {
+          if (!userId || client.userId === userId) {
+            client.res.write(data);
+          }
+        });
+      } catch (e) {
+        console.error('Error processing Redis message:', e);
+      }
+    });
+  }).catch(e => console.error('Failed to connect to Redis:', e));
+}
+
 function notifyClients(userId, event) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  sseClients.forEach(client => {
-    if (!userId || client.userId === userId) {
-      client.res.write(data);
-    }
-  });
+  if (pubClient && pubClient.isOpen) {
+    pubClient.publish('sse-events', JSON.stringify({ userId, event }));
+  } else {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    sseClients.forEach(client => {
+      if (!userId || client.userId === userId) {
+        client.res.write(data);
+      }
+    });
+  }
 }
 
 // Utilities
@@ -821,7 +871,7 @@ app.get('/api/sessions/today/all', (req, res) => {
 
 
 // 9) Mark Attendance
-app.post('/api/attendance/mark', authenticateToken, (req, res) => {
+app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res) => {
   const { sessionId, code } = req.body;
   const studentId = req.user.id; // SECURE: Extracted from verified JWT, cannot be spoofed!
 
