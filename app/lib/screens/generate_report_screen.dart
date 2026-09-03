@@ -256,7 +256,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             );
           }
         } else {
-          throw Exception('Failed to download from server');
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       } else {
 
@@ -277,7 +288,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           }
           OpenFile.open(path);
         } else {
-          throw Exception('Failed to download from server');
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       }
     } catch (e) {

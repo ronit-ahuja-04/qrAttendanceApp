@@ -260,8 +260,13 @@ function generateQrCode() {
 
 function formatProfilePictureUrl(url, userId) {
   if (!url) return url;
+  
+  const baseUrl = process.env.BASE_URL || 'https://qr-attendance-api-wvvs.onrender.com';
+  
   if (url.startsWith('data:')) {
-    return `/profile-images/${userId}`;
+    return `${baseUrl}/profile-images/${userId}`;
+  } else if (url.startsWith('/uploads')) {
+    return `${baseUrl}${url}`;
   }
   return url;
 }

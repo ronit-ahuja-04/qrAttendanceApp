@@ -1220,25 +1220,7 @@ class _UpcomingSessionsList extends StatelessWidget {
 
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
       if (s['day'] != currentDayStr) return false;
-
-      final startTimeStrRaw = s['startTime'] as String? ?? '00:00';
-      final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
-      
-      try {
-        final endParts = endTimeStrRaw.split(':');
-        final endHour = int.parse(endParts[0]);
-        final endMin = int.parse(endParts[1]);
-
-        DateTime endDateTime =
-            DateTime(now.year, now.month, now.day, endHour, endMin);
-
-        // If the session ended before 'now', it shouldn't be in Upcoming anymore
-        if (endDateTime.isBefore(now)) return false;
-
-        return true;
-      } catch (e) {
-        return true; // Fallback to include if parsing fails
-      }
+      return true;
     }).toList();
 
     // Sort them by time for the dashboard

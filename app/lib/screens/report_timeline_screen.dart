@@ -110,10 +110,20 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
             );
           }
         } else {
-          throw Exception('Failed to download from server');
+          String errorMsg = 'Failed to download from server';
+          try {
+            if (response.body.isNotEmpty) {
+               try {
+                 final decoded = jsonDecode(response.body);
+                 errorMsg = decoded['error'] ?? response.body;
+               } catch(_) {
+                 errorMsg = response.body;
+               }
+            }
+          } catch (_) {}
+          throw Exception(errorMsg);
         }
       } else {
-
         // Mobile/Desktop logic
         final response = await httpClient.get(Uri.parse(url));
         if (response.statusCode == 200) {
