@@ -14,7 +14,7 @@ const apiLimiter = rateLimit({
 // Max 5 attempts per 15 minutes to prevent brute force credential stuffing
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 500,
   message: { error: 'tooManyLoginAttempts', message: 'Too many login attempts from this IP, please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
