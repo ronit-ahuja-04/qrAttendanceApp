@@ -1174,7 +1174,7 @@ class _UpcomingSessionsList extends StatelessWidget {
                               sessionSubtitle:
                                   '${session['venue'] ?? ''} • ${_formatTimeString(session['startTime'] as String? ?? '')} - ${_formatTimeString(session['endTime'] as String? ?? '')} • Div: ${session['batchTarget'] ?? ''}',
                               batchTarget: targetBatch,
-                              slotId: session['id'],
+                              slotId: session['id'] ?? session['_id'],
                             ),
                           ),
                         );
@@ -1225,8 +1225,8 @@ class _UpcomingSessionsList extends StatelessWidget {
       final endTimeStrRaw = s['endTime'] as String? ?? '00:00';
       final eParts = endTimeStrRaw.split(':');
       if (eParts.length == 2) {
-        final eHour = int.parse(eParts[0]);
-        final eMin = int.parse(eParts[1]);
+        final eHour = int.tryParse(eParts[0]) ?? 0;
+        final eMin = int.tryParse(eParts[1]) ?? 0;
         final endDateTime = DateTime(now.year, now.month, now.day, eHour, eMin);
         if (now.isAfter(endDateTime)) return false;
       }
@@ -1234,10 +1234,12 @@ class _UpcomingSessionsList extends StatelessWidget {
       return true;
     }).map((s) {
       final hasSession = todaySessions.any((ts) {
-        if (ts.slotId != null && ts.slotId!.isNotEmpty) {
-          return ts.slotId == s['id'];
+        final slotId = s['id'] ?? s['_id'];
+        if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
+          return ts.slotId == slotId;
         }
-        return ts.courseCode.contains(s['subject']) && ts.batchTarget == s['batchTarget'];
+        final subject = s['subject'] as String? ?? '';
+        return subject.isNotEmpty && ts.courseCode.contains(subject) && ts.batchTarget == s['batchTarget'];
       });
       return {...s, '_hasSession': hasSession};
     }).toList();
@@ -1246,7 +1248,19 @@ class _UpcomingSessionsList extends StatelessWidget {
     todaySlots.sort((a, b) {
       final tA = a['startTime'] as String? ?? '00:00';
       final tB = b['startTime'] as String? ?? '00:00';
-      return tA.compareTo(tB);
+      
+      // Parse hour and minute for accurate sorting (e.g. 9:00 vs 10:00)
+      final partsA = tA.split(':');
+      final partsB = tB.split(':');
+      
+      final hA = partsA.isNotEmpty ? (int.tryParse(partsA[0]) ?? 0) : 0;
+      final mA = partsA.length > 1 ? (int.tryParse(partsA[1]) ?? 0) : 0;
+      
+      final hB = partsB.isNotEmpty ? (int.tryParse(partsB[0]) ?? 0) : 0;
+      final mB = partsB.length > 1 ? (int.tryParse(partsB[1]) ?? 0) : 0;
+      
+      if (hA != hB) return hA.compareTo(hB);
+      return mA.compareTo(mB);
     });
 
     if (todaySlots.isEmpty) {
@@ -1311,7 +1325,7 @@ class _UpcomingSessionsList extends StatelessWidget {
             date: 'Today',
             time: '$startTimeStr - $endTimeStr',
             venue: session['venue'] as String? ?? 'TBA',
-            course: session['subject'] as String,
+            course: session['subject'] as String? ?? 'Unknown',
             students: 60, // Placeholder, will come from backend
             status: statusText,
             isUpcoming: true,
