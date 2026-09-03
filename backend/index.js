@@ -1437,8 +1437,9 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
 });
 
 function notifyTimetableUpdate(facultyId, subject, batchTarget) {
-  db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
-    if (err || !faculty) return;
+  setTimeout(() => {
+    db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
+      if (err || !faculty) return;
     const facultyName = faculty.name;
 
     db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role=\'student\'', [], (err, students) => {
@@ -1474,7 +1475,7 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget) {
         }
       });
     });
-  });
+  }, 1000);
 }
 
 function calculateEndTime(startTime, type) {
