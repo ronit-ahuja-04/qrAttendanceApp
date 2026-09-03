@@ -16,6 +16,7 @@ import '../ams/notification_service.dart';
 import '../routes/fade_blur_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui';
 
 class LoginScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _role = 'student';
+  String _role = kIsWeb ? 'faculty' : 'student';
   bool _isLoading = false;
 
   @override
@@ -272,12 +273,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                       curve: Curves.easeOut,
                                       height: isKeyboardOpen ? 12 : 24,
                                     ),
-                                    VesitRoleToggle(
-                                      value: _role,
-                                      onChanged: (r) => setState(() => _role = r),
-                                    ),
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 300),
+                                    if (!kIsWeb)
+                                      VesitRoleToggle(
+                                        value: _role,
+                                        onChanged: (r) => setState(() => _role = r),
+                                      ),
+                                    if (!kIsWeb)
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 300),
                                       curve: Curves.easeOut,
                                       height: isKeyboardOpen ? 12 : 24,
                                     ),
