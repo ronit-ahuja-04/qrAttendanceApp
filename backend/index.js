@@ -459,7 +459,8 @@ app.use((req, res, next) => {
     '/forgot-password',
     '/reset-password',
     '/change-password',
-    '/timetable'
+    '/timetable',
+    '/api/debug/sessions'
   ];
   if (publicPaths.includes(req.path) || req.path.startsWith('/users/') || req.path.startsWith('/notifications/stream')) {
     return next();
