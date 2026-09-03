@@ -1440,7 +1440,8 @@ class _SessionTile extends StatefulWidget {
       this.isProxiedBySomeoneElse = false,
       this.onTap,
       this.actionLabel = 'View Report',
-      this.onAction});
+      this.onAction,
+      this.onReject});
   final String date;
   final String time;
   final String venue;
