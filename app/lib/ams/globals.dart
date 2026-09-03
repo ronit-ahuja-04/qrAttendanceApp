@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import 'models.dart';
 
@@ -16,6 +17,29 @@ class AmsGlobals {
 
   /// Global notifier for ThemeMode (Light/Dark)
   static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+
+  static Future<void> initTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('isDarkTheme');
+    if (isDark != null) {
+      themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+    } else {
+      themeNotifier.value = ThemeMode.system;
+    }
+  }
+
+  static Future<void> setTheme(ThemeMode mode) async {
+    themeNotifier.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    if (mode == ThemeMode.dark) {
+      await prefs.setBool('isDarkTheme', true);
+    } else if (mode == ThemeMode.light) {
+      await prefs.setBool('isDarkTheme', false);
+    } else {
+      await prefs.remove('isDarkTheme');
+    }
+  }
+
   static final ValueNotifier<int> refreshNotifier = ValueNotifier(0);
   
   static String? userRole;
@@ -79,6 +103,9 @@ class AmsGlobals {
     final lowerName = rawName.toLowerCase().replaceAll('prof.', '').trim();
     if (lowerName == 'pn') return 'Pooja Nagdev';
     if (lowerName == 'ps') return 'Pooja Shetty';
+    if (lowerName == 'sso') return 'Sharmila Sengupta';
+    if (lowerName == 'dk') return 'Dipti Karani';
+    if (lowerName == 'sy') return 'Smita Jangale';
     
     // Standard formatting (removing 'Prof.', capitalizing words)
     final parts = rawName.split(' ').where((s) => s.isNotEmpty).toList();

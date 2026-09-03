@@ -1144,25 +1144,7 @@ class _UpcomingSessionsList extends StatelessWidget {
                       );
                     }
 
-                    if (end != null && now.isAfter(end)) {
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: context.colors.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Session Ended',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: context.colors.onSurfaceVariant,
-                          ),
-                        ),
-                      );
-                    }
+
 
                     return ElevatedButton(
                       onPressed: () async {
@@ -1218,8 +1200,17 @@ class _UpcomingSessionsList extends StatelessWidget {
     final now = DateTime.now();
     final currentDayStr = DateFormat('EEE').format(now); // e.g. "Thu"
 
+    final todaySessions = allSessions.where((s) {
+      final sDate = s.createdAt;
+      return sDate.year == now.year && sDate.month == now.month && sDate.day == now.day;
+    }).toList();
+
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
       if (s['day'] != currentDayStr) return false;
+      
+      final hasSession = todaySessions.any((ts) => ts.courseCode == s['subject'] && ts.batchTarget == s['batchTarget']);
+      if (hasSession) return false;
+
       return true;
     }).toList();
 

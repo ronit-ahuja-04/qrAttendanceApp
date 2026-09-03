@@ -92,11 +92,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               value: isDark,
                               activeColor: context.colors.vesitPrimary,
                               onChanged: (val) {
-                                AmsGlobals.themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                                AmsGlobals.setTheme(val ? ThemeMode.dark : ThemeMode.light);
                               },
                             ),
                             onTap: () {
-                               AmsGlobals.themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+                               AmsGlobals.setTheme(isDark ? ThemeMode.light : ThemeMode.dark);
                             },
                           );
                         },

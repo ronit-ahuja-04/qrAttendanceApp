@@ -21,6 +21,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await NotificationService().init(navigatorKey);
+  await AmsGlobals.initTheme();
   runApp(const AttendancePortalApp());
 }
 
