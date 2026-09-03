@@ -14,6 +14,8 @@ class AmsGlobals {
   static String? activeSessionId;
   /// Global list of timetable slots shared between the Manager and the Dashboard.
   static final List<Map<String, dynamic>> timetableSlots = [];
+  /// Global list of faculty sessions to cache the data and enable instant dashboard loading.
+  static final List<AttendanceSession> facultySessions = [];
 
   /// Global notifier for ThemeMode (Light/Dark)
   static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);

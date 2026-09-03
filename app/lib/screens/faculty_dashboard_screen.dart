@@ -59,10 +59,10 @@ class FacultyDashboardScreen extends StatefulWidget {
 }
 
 class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
-  bool _isLoading = true;
+  bool _isLoading = AmsGlobals.timetableSlots.isEmpty || AmsGlobals.facultySessions.isEmpty;
   StreamSubscription? _eventSub;
   List<AttendanceSession> _pendingSessions = [];
-  List<AttendanceSession> _allSessions = [];
+  List<AttendanceSession> _allSessions = List.from(AmsGlobals.facultySessions);
   Timer? _refreshTimer;
 
   @override
@@ -107,6 +107,8 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
         setState(() {
           AmsGlobals.timetableSlots.clear();
           AmsGlobals.timetableSlots.addAll(slots);
+          AmsGlobals.facultySessions.clear();
+          AmsGlobals.facultySessions.addAll(sessions);
           _pendingSessions = pending;
           _allSessions = sessions;
           _isLoading = false;
@@ -1205,11 +1207,7 @@ class _UpcomingSessionsList extends StatelessWidget {
       return Column(
         children: List.generate(
             2,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 80, borderRadius: 12),
-                )),
+            (index) => const _SessionCardSkeleton()),
       );
     }
 
@@ -1363,11 +1361,7 @@ class _RecentSessionsList extends StatelessWidget {
       return Column(
         children: List.generate(
             3,
-            (index) => const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: VesitSkeleton(
-                      width: double.infinity, height: 80, borderRadius: 12),
-                )),
+            (index) => const _SessionCardSkeleton()),
       );
     }
 
@@ -1937,6 +1931,52 @@ class _ProfileAvatar extends StatelessWidget {
         style: context.textStyles.vesitHeadlineMd.copyWith(
             color: context.colors.vesitWhite,
             fontSize: size * 0.4),
+      ),
+    );
+  }
+}
+
+class _SessionCardSkeleton extends StatelessWidget {
+  const _SessionCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.vesitWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const VesitSkeleton(width: 48, height: 48, borderRadius: 12),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    VesitSkeleton(width: 150, height: 20, borderRadius: 4),
+                    SizedBox(height: 8),
+                    VesitSkeleton(width: 100, height: 16, borderRadius: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const VesitSkeleton(width: double.infinity, height: 48, borderRadius: 12),
+        ],
       ),
     );
   }
