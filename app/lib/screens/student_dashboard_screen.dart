@@ -198,9 +198,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   .push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               onAvatarTap: widget.onProfileTap ?? () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const StudentProfileScreen())),
-              onRefreshTap: () {
-                _fetchData();
-              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -316,14 +313,12 @@ class _Header extends StatelessWidget {
     required this.studentName,
     required this.onNotificationsTap,
     required this.onAvatarTap,
-    required this.onRefreshTap,
   });
 
   final DateTime now;
   final String studentName;
   final VoidCallback onNotificationsTap;
   final VoidCallback onAvatarTap;
-  final VoidCallback onRefreshTap;
 
   String _getGreeting() {
     final h = now.hour;
@@ -412,19 +407,6 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: onRefreshTap,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: context.colors.outlineVariant, width: 1.5),
-              ),
-              child: Icon(Icons.refresh,
-                  color: context.colors.onSurface, size: 22),
             ),
           ),
           const SizedBox(width: 12),
