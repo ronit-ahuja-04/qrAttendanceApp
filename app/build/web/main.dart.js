@@ -111840,81 +111840,82 @@ s=this.f
 s.a_$=r
 s.W$=0
 this.al()},
-kX(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1
-var $async$kX=A.p(function(a2,a3){if(a2===1){o.push(a3)
-s=p}for(;;)switch(s){case 0:a0=n.c
-a0.toString
-A.tZ(a0).he()
+kX(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2
+var $async$kX=A.p(function(a3,a4){if(a3===1){o.push(a4)
+s=p}for(;;)switch(s){case 0:a1=n.c
+a1.toString
+A.tZ(a1).he()
 if(!n.d.gP().jR()){s=1
 break}n.G(new A.aKO(n))
-a0=t.z
+a1=t.z
 s=3
-return A.k(A.dH(B.jH,null,a0),$async$kX)
+return A.k(A.dH(B.jH,null,a1),$async$kX)
 case 3:j=B.c.da(n.e.a.a)
 i=B.c.da(n.f.a.a)
 s=4
 return A.k($.dT().GY(j,i),$async$kX)
-case 4:m=a3
+case 4:m=a4
 s=5
-return A.k(A.dH(B.hT,null,a0),$async$kX)
+return A.k(A.dH(B.hT,null,a1),$async$kX)
 case 5:s=m!=null?6:8
 break
 case 6:if(m.b!=="faculty"){if(n.c==null){s=1
 break}n.G(new A.aKP(n))
-a0=n.c.ae(t.Pu).f
-h=A.A("Role mismatch: This is a "+m.b+" account. Please select "+m.b.toUpperCase()+" above!",null,null,null,null,B.Gr,null,null,null)
-g=n.c
-g.toString
-a0.lG(A.J5(null,null,null,A.h(g).fy,B.dQ,B.B,null,h,null,B.ec,null,null,null,B.tD,null,null,null,new A.cA(A.an(8),B.u),null,null))
+h=m.b==="student"?"Access Restricted: This web portal is exclusively designated for faculty use. Students must utilize the official mobile application to access their accounts.":"Role mismatch: This is a "+m.b+" account. Please select "+m.b.toUpperCase()+" above!"
+a1=n.c.ae(t.Pu).f
+g=A.A(h,null,null,null,null,B.Gr,null,null,null)
+f=n.c
+f.toString
+a1.lG(A.J5(null,null,null,A.h(f).fy,B.dQ,B.B,null,g,null,B.ec,null,null,null,B.tD,null,null,null,new A.cA(A.an(8),B.u),null,null))
 s=1
 break}$.bX=m
 s=9
 return A.k(A.hF(),$async$kX)
-case 9:f=a3
+case 9:e=a4
 s=10
-return A.k(f.u1("String","ams_user_session",B.M.fD(m.iC(),null)),$async$kX)
-case 10:a0=f.a
-h=J.ad(a0)
-g=A.eg(h.h(a0,"notif_master"))
-e=g!==!1
-s=e?11:12
+return A.k(e.u1("String","ams_user_session",B.M.fD(m.iC(),null)),$async$kX)
+case 10:a1=e.a
+g=J.ad(a1)
+f=A.eg(g.h(a1,"notif_master"))
+d=f!==!1
+s=d?11:12
 break
 case 11:p=14
-g=$.l7
-d=(g==null?$.l7=$.CU():g).ui("[DEFAULT]")
-A.kf(d,$.rS(),!0)
+f=$.l7
+c=(f==null?$.l7=$.CU():f).ui("[DEFAULT]")
+A.kf(c,$.rS(),!0)
 s=17
-return A.k(A.aj7(new A.l6(d)).SA(),$async$kX)
-case 17:l=a3
+return A.k(A.aj7(new A.l6(c)).SA(),$async$kX)
+case 17:l=a4
 if(l!=null){$.pi().d=l
 new A.hR().my(m.a,l)}p=2
 s=16
 break
 case 14:p=13
-a1=o.pop()
-k=A.a3(a1)
+a2=o.pop()
+k=A.a3(a2)
 A.cx("Error getting fresh token: "+A.m(k))
 s=16
 break
 case 13:s=2
 break
-case 16:case 12:g=m.a
-b=A.eg(h.h(a0,"notif_alerts"))
-a=A.eg(h.h(a0,"notif_proxy"))
-a0=A.eg(h.h(a0,"notif_attendance"))
-new A.hR().B_(g,A.ag(["notif_master",e,"notif_alerts",b!==!1,"notif_proxy",a!==!1,"notif_attendance",a0!==!1],t.N,t.y))
-a0=n.c
-if(a0==null){s=1
-break}a0=A.b2(a0,!1)
-a0.lr(A.aiG(m.b==="student"?B.iM:B.u8))
+case 16:case 12:f=m.a
+a=A.eg(g.h(a1,"notif_alerts"))
+a0=A.eg(g.h(a1,"notif_proxy"))
+a1=A.eg(g.h(a1,"notif_attendance"))
+new A.hR().B_(f,A.ag(["notif_master",d,"notif_alerts",a!==!1,"notif_proxy",a0!==!1,"notif_attendance",a1!==!1],t.N,t.y))
+a1=n.c
+if(a1==null){s=1
+break}a1=A.b2(a1,!1)
+a1.lr(A.aiG(m.b==="student"?B.iM:B.u8))
 s=7
 break
 case 8:if(n.c==null){s=1
 break}n.G(new A.aKQ(n))
-a0=n.c.ae(t.Pu).f
-h=n.c
-h.toString
-a0.lG(A.J5(null,null,null,A.h(h).fy,B.dQ,B.B,null,B.a98,null,B.ec,null,null,null,B.tD,null,null,null,new A.cA(A.an(8),B.u),null,null))
+a1=n.c.ae(t.Pu).f
+g=n.c
+g.toString
+a1.lG(A.J5(null,null,null,A.h(g).fy,B.dQ,B.B,null,B.a98,null,B.ec,null,null,null,B.tD,null,null,null,new A.cA(A.an(8),B.u),null,null))
 case 7:case 1:return A.r(q,r)
 case 2:return A.q(o.at(-1),r)}})
 return A.t($async$kX,r)},
