@@ -877,10 +877,10 @@ app.get('/api/sessions/faculty/:facultyId', (req, res) => {
     SELECT sessions.*, users.name as proxyFacultyName 
     FROM sessions 
     LEFT JOIN users ON sessions.proxyFacultyId = users.id 
-    WHERE facultyId = ? 
+    WHERE facultyId = ? OR proxyFacultyId = ?
     ORDER BY createdAt DESC
   `;
-  db.all(query, [req.params.facultyId], (err, rows) => {
+  db.all(query, [req.params.facultyId, req.params.facultyId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     rows.forEach(row => {
       if (row.qrCode) {
@@ -1223,8 +1223,8 @@ app.get('/api/report/bulk-excel', (req, res) => {
   }
 
   // 1. Get all sessions matching criteria
-  let q = 'SELECT id, courseCode, batchTarget, createdAt, enrolledStudentIds FROM sessions WHERE facultyId = ? AND courseCode = ? AND createdAt >= ? AND createdAt <= ?';
-  let params = [facultyId, subject, startDate, endDate];
+  let q = 'SELECT id, courseCode, batchTarget, createdAt, enrolledStudentIds FROM sessions WHERE (facultyId = ? OR proxyFacultyId = ?) AND courseCode = ? AND createdAt >= ? AND createdAt <= ?';
+  let params = [facultyId, facultyId, subject, startDate, endDate];
   
   if (batchTarget && batchTarget !== 'All') {
     q += ' AND batchTarget = ?';

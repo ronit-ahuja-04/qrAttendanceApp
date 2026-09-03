@@ -73,9 +73,9 @@ class _ReportTimelineScreenState extends State<ReportTimelineScreen> {
 
     try {
       final facultyId = AmsGlobals.loggedInUser!.id;
-      final start = _dateRange!.start.toIso8601String();
+      final start = _dateRange!.start.toUtc().toIso8601String();
       // Add almost 1 full day to the end date so it covers 23:59:59 of that day
-      final end = _dateRange!.end.add(const Duration(hours: 23, minutes: 59, seconds: 59)).toIso8601String();
+      final end = _dateRange!.end.add(const Duration(hours: 23, minutes: 59, seconds: 59)).toUtc().toIso8601String();
       final subject = Uri.encodeComponent(widget.subject);
       final batchTarget = Uri.encodeComponent(widget.batchTarget);
       
