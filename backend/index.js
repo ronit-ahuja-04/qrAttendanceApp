@@ -84,6 +84,25 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Temporary Route: Fix Names
+app.get('/api/admin/fix-names', (req, res) => {
+  const queries = [
+    `UPDATE users SET name = 'Pooja Shetty' WHERE email = 'pooja.shetty@ves.ac.in'`,
+    `UPDATE users SET name = 'Manoj Sabnis' WHERE email = 'manoj.sabnis@ves.ac.in'`,
+    `UPDATE users SET name = 'Pooja Nagdev' WHERE email = 'pooja.nagdev@ves.ac.in'`,
+    `UPDATE users SET name = 'Shanta Sondur' WHERE email = 'shanta.sondur@ves.ac.in'`,
+    `UPDATE users SET name = 'Charusheela Nehete' WHERE email = 'charusheela.nehete@ves.ac.in'`,
+    `UPDATE users SET name = 'Swapnil Yadav' WHERE email = 'swapnil.yadav@ves.ac.in'`
+  ];
+  let completed = 0;
+  for (const sql of queries) {
+    db.run(sql, (err) => {
+      completed++;
+      if (completed === queries.length) res.json({ message: 'Names fixed!' });
+    });
+  }
+});
+
 // Admin Route: Pilot Cleanup (Wipe data and update emails)
 app.get('/api/admin/pilot-cleanup', (req, res) => {
   const crypto = require('crypto');
