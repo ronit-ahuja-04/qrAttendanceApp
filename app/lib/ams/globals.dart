@@ -4,6 +4,7 @@ import 'api_services.dart';
 import 'models.dart';
 
 class AmsGlobals {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   static User? loggedInUser;
   static final ApiSessionService sessionService = ApiSessionService();
   static final ApiAttendanceService attendanceService = ApiAttendanceService();

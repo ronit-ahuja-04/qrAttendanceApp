@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 
+import 'package:flutter/material.dart';
+
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner = http.Client();
 
@@ -25,7 +27,33 @@ class AuthenticatedClient extends http.BaseClient {
         }
       } catch (e) {}
     }
-    return _inner.send(request);
+    
+    final response = await _inner.send(request);
+    
+    if (response.statusCode == 503) {
+      final context = AmsGlobals.navigatorKey.currentContext;
+      if (context != null) {
+        Future.microtask(() => Navigator.of(context).pushReplacementNamed('/maintenance'));
+      }
+    } else if (response.statusCode >= 500 || response.statusCode == 429) {
+      final context = AmsGlobals.navigatorKey.currentContext;
+      if (context != null) {
+        String msg = 'An unexpected error occurred.';
+        switch (response.statusCode) {
+          case 429: msg = '429 Too Many Requests: Please wait a moment.'; break;
+          case 500: msg = '500 Internal Server Error: An unexpected glitch occurred.'; break;
+          case 502: msg = '502 Bad Gateway: Invalid response from upstream server.'; break;
+          case 504: msg = '504 Gateway Timeout: The server is taking too long.'; break;
+        }
+        Future.microtask(() {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red.shade800),
+          );
+        });
+      }
+    }
+    
+    return response;
   }
 }
 

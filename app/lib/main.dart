@@ -10,6 +10,7 @@ import 'firebase_options.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ams/models.dart';
+import 'screens/maintenance_screen.dart';
 import 'screens/faculty_main_layout.dart';
 import 'screens/student_main_layout.dart';
 
@@ -41,6 +42,9 @@ class AttendancePortalApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           title: 'VESIT Attendance Portal',
           debugShowCheckedModeBanner: false,
+          routes: {
+            '/maintenance': (context) => const MaintenanceScreen(),
+          },
           scrollBehavior: const MaterialScrollBehavior().copyWith(
             dragDevices: {PointerDeviceKind.mouse, PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.unknown},
           ),

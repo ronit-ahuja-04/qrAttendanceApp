@@ -60,6 +60,26 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Maintenance Mode Middleware
+app.use((req, res, next) => {
+  if (process.env.MAINTENANCE_MODE === 'true') {
+    return res.status(503).json({ 
+      error: 'Service Unavailable', 
+      message: 'The system is currently undergoing maintenance. Please try again later.' 
+    });
+  }
+  next();
+});
+
+// Admin Route: Reset all student device bindings
+app.get('/api/admin/reset-devices', (req, res) => {
+  db.run(`UPDATE users SET deviceId = NULL WHERE role = 'student'`, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'All student device bindings have been successfully reset.' });
+  });
+});
+
+
 // Global logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
