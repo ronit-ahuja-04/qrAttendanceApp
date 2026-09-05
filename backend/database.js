@@ -125,11 +125,13 @@ db.serialize(() => {
     addColumn('sessions', 'metadata');
     addColumn('sessions', 'batchTarget');
     addColumn('sessions', 'groupId');
+    addColumn('users', 'deviceId');
   } else {
     db.run(`ALTER TABLE sessions ADD COLUMN slotId TEXT`, (err) => {});
     db.run(`ALTER TABLE sessions ADD COLUMN metadata TEXT`, (err) => {});
     db.run(`ALTER TABLE sessions ADD COLUMN batchTarget TEXT`, (err) => {});
     db.run(`ALTER TABLE sessions ADD COLUMN groupId TEXT`, (err) => {});
+    db.run(`ALTER TABLE users ADD COLUMN deviceId TEXT`, (err) => {});
   }
 
   db.run(`CREATE TABLE IF NOT EXISTS attendance_records (
