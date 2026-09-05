@@ -16,7 +16,7 @@ import '../ams/notification_service.dart';
 import '../routes/fade_blur_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:ui';
 
 class LoginScreen extends StatefulWidget {
@@ -43,6 +43,23 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleSignIn() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
+
+    if (_role == 'student' && kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.phone_android, color: Colors.white),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Android users must use the dedicated APK app. Web login is blocked for Android.')),
+            ],
+          ),
+          backgroundColor: Colors.red.shade800,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
     await Future.delayed(const Duration(milliseconds: 50)); // Force Flutter to paint the loading frame
