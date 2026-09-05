@@ -361,6 +361,9 @@ app.post('/login', loginLimiter, (req, res) => {
   const { email, password, deviceId } = req.body;
   console.log('Login attempt:', email, password);
   db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(401).json({ error: 'Invalid credentials' });
+
     // Helper function to finalize login
     const finalizeLogin = () => {
       row.branch = 'INFT'; // Hardcode branch for now as per user request
@@ -1241,6 +1244,8 @@ app.get('/api/report/excel/:id', (req, res) => {
           await workbook.xlsx.write(res);
           res.end();
         });
+      });
+    });
   });
 });
 
