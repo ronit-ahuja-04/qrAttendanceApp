@@ -9,10 +9,29 @@ async function main() {
     process.exit(1);
   }
 
-  db.all('SELECT id, role, name, rollNo, email FROM users', async (err, users) => {
+  const testEmail = process.argv[2];
+  
+  let query = 'SELECT id, role, name, rollNo, email FROM users';
+  let params = [];
+  
+  if (testEmail) {
+    query += ' WHERE email = ?';
+    params.push(testEmail);
+    console.log(`🧪 TESTING MODE: Only sending to ${testEmail}\n`);
+  } else {
+    console.log(`⚠️ PRODUCTION MODE: Sending to ALL users in 5 seconds... Press Ctrl+C to cancel!`);
+    await new Promise(r => setTimeout(r, 5000));
+  }
+
+  db.all(query, params, async (err, users) => {
     if (err) {
       console.error(err);
       process.exit(1);
+    }
+
+    if (users.length === 0) {
+      console.log("No users found matching that email.");
+      process.exit(0);
     }
 
     console.log(`Found ${users.length} users. Starting email broadcast...\n`);
