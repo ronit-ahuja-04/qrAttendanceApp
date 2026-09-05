@@ -172,7 +172,7 @@ class _IdBadgeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = AmsGlobals.loggedInUser;
     final name = user?.formattedName ?? 'Faculty Member';
-    final rawId = user?.rollNo ?? user?.id ?? "0000";
+    final rawId = user?.rollNo ?? (user?.role == 'faculty' ? 'FACULTY' : user?.id) ?? "0000";
     final rollNo = rawId.toUpperCase().replaceAll('VESIT-', '').replaceAll('FAC-', '');
     
     // Hardcoded for INFT

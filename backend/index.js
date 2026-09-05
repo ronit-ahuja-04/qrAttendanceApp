@@ -1494,6 +1494,9 @@ app.post('/forgot-password', (req, res) => {
     } else {
       expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     }
+    
+    // Auto-flush all globally expired tokens before inserting new one to keep DB clean
+    db.run(`DELETE FROM reset_tokens WHERE expiry < ?`, [new Date().toISOString()]);
 
     // First delete any existing token for this email to avoid duplicate primary key on retry
     db.run(`DELETE FROM reset_tokens WHERE LOWER(email) = LOWER(?)`, [row.email], (delErr) => {
