@@ -1,41 +1,6 @@
 require('dotenv').config();
-const dns = require('node:dns');
-dns.setDefaultResultOrder('ipv4first'); // Force IPv4 to fix Render ENETUNREACH IPv6 errors
-const express = require('express');
-const { google } = require('googleapis');
-
-// Google OAuth2 Client for Gmail REST API
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GMAIL_CLIENT_ID,
-  process.env.GMAIL_CLIENT_SECRET,
-  "https://developers.google.com/oauthplayground"
-);
-
-// We define a helper function to send email so it gets a fresh access token each time
-async function sendGmailApiEmail(toEmail, subject, htmlBody) {
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-
-  const rawMessage = [
-    `From: "AMS – Attendance System" <${process.env.MAIL_USER}>`,
-    `To: ${toEmail}`,
-    `Subject: ${subject}`,
-    `Content-Type: text/html; charset=utf-8`,
-    '',
-    htmlBody
-  ].join('\n');
-
-  const encodedMessage = Buffer.from(rawMessage)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-  await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encodedMessage },
-  });
-}
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
@@ -1487,14 +1452,21 @@ app.post('/forgot-password', (req, res) => {
             </div>
           `;
 
-        sendGmailApiEmail(row.email, 'Your AMS Password Reset Code', htmlBody)
+        const msg = {
+          to: row.email,
+          from: process.env.MAIL_USER, // Must match the verified sender in SendGrid
+          subject: 'Your AMS Password Reset Code',
+          html: htmlBody,
+        };
+
+        sgMail.send(msg)
           .then(() => {
-            console.log(`[RESET] OTP sent to ${email}`);
+            console.log(`[RESET] OTP sent to ${row.email}`);
             res.json({ message: 'Reset code sent to your email' });
           })
           .catch((mailErr) => {
-            console.error('[MAIL ERROR]', mailErr);
-            return res.status(500).json({ error: 'Failed to send reset email via Gmail API.' });
+            console.error('[MAIL ERROR]', mailErr.response ? mailErr.response.body : mailErr);
+            return res.status(500).json({ error: 'Failed to send reset email via SendGrid API.' });
           });
       });
     });
