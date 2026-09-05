@@ -2,22 +2,40 @@ require('dotenv').config();
 const dns = require('node:dns');
 dns.setDefaultResultOrder('ipv4first'); // Force IPv4 to fix Render ENETUNREACH IPv6 errors
 const express = require('express');
-const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
 
-// Nodemailer transporter (Gmail + App Password)
-const mailer = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  family: 4, // Force IPv4 on Render's broken IPv6 network
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
-});
+// Google OAuth2 Client for Gmail REST API
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  "https://developers.google.com/oauthplayground"
+);
+
+// We define a helper function to send email so it gets a fresh access token each time
+async function sendGmailApiEmail(toEmail, subject, htmlBody) {
+  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const rawMessage = [
+    `From: "AMS – Attendance System" <${process.env.MAIL_USER}>`,
+    `To: ${toEmail}`,
+    `Subject: ${subject}`,
+    `Content-Type: text/html; charset=utf-8`,
+    '',
+    htmlBody
+  ].join('\n');
+
+  const encodedMessage = Buffer.from(rawMessage)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encodedMessage },
+  });
+}
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
@@ -1452,11 +1470,7 @@ app.post('/forgot-password', (req, res) => {
         if (insertErr) return res.status(500).json({ error: 'Failed to generate reset token' });
 
         // Send real OTP email
-        const mailOptions = {
-          from: `"AMS – Attendance System" <${process.env.MAIL_USER}>`,
-          to: row.email,
-          subject: 'Your AMS Password Reset Code',
-          html: `
+        const htmlBody = `
             <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
               <div style="background:#002147;padding:24px;text-align:center">
                 <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
@@ -1471,17 +1485,17 @@ app.post('/forgot-password', (req, res) => {
                 <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
               </div>
             </div>
-          `,
-        };
+          `;
 
-        mailer.sendMail(mailOptions, (mailErr) => {
-          if (mailErr) {
+        sendGmailApiEmail(row.email, 'Your AMS Password Reset Code', htmlBody)
+          .then(() => {
+            console.log(`[RESET] OTP sent to ${email}`);
+            res.json({ message: 'Reset code sent to your email' });
+          })
+          .catch((mailErr) => {
             console.error('[MAIL ERROR]', mailErr);
-            return res.status(500).json({ error: 'Failed to send reset email. Check server mail config.' });
-          }
-          console.log(`[RESET] OTP sent to ${email}`);
-          res.json({ message: 'Reset code sent to your email' }); // token NOT returned in prod
-        });
+            return res.status(500).json({ error: 'Failed to send reset email via Gmail API.' });
+          });
       });
     });
   });
