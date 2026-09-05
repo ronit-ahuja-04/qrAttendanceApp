@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _role = kIsWeb ? 'faculty' : 'student';
+  String _role = 'student';
   bool _isLoading = false;
 
   @override
@@ -77,12 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user.role != _role) {
         if (!mounted) return;
         setState(() => _isLoading = false);
-        String errorMessage;
-        if (kIsWeb && user.role == 'student') {
-          errorMessage = 'Access Restricted: This web portal is exclusively designated for faculty use. Students must utilize the official mobile application to access their accounts.';
-        } else {
-          errorMessage = 'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!';
-        }
+        String errorMessage = 'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!';
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -296,8 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       curve: Curves.easeOut,
                                       height: isKeyboardOpen ? 12 : 24,
                                     ),
-                                    if (!kIsWeb)
-                                      VesitRoleToggle(
+                                    VesitRoleToggle(
                                         value: _role,
                                         onChanged: (r) => setState(() => _role = r),
                                       ),

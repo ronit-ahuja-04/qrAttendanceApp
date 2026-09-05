@@ -365,7 +365,7 @@ app.post('/login', loginLimiter, (req, res) => {
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
     
     // Check device binding for students
-    if (row.role === 'student' && process.env.DEVICE_BINDING_ENABLED === 'true') {
+    if (row.role === 'student') {
       if (deviceId) {
         if (!row.deviceId) {
           // Bind new device
