@@ -44,21 +44,40 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
-    if (_role == 'student' && kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.phone_android, color: Colors.white),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Android users must use the dedicated APK app. Web login is blocked for Android.')),
-            ],
+    if (_role == 'student' && kIsWeb) {
+      if (defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.desktop_windows, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Students are restricted to mobile devices only.')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade800,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: Colors.red.shade800,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
+        );
+        return;
+      }
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.phone_android, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Please use the dedicated Android app, not the browser.')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -312,6 +331,30 @@ class _LoginScreenState extends State<LoginScreen> {
                                     VesitRoleToggle(
                                         value: _role,
                                         onChanged: (r) => setState(() => _role = r),
+                                      ),
+                                    if (kIsWeb && _role == 'student' && defaultTargetPlatform == TargetPlatform.iOS)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 16.0),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.1),
+                                            border: Border.all(color: Colors.red),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Row(
+                                            children: [
+                                              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                                              SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'STRICTLY DO NOT USE A PRIVATE TAB. You will lose your login once the tab is cleared and will be locked out.',
+                                                  style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     if (!kIsWeb)
                                       AnimatedContainer(
