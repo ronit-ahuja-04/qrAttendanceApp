@@ -49,12 +49,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final user = await AmsGlobals.sessionService.login(
-      email,
-      password,
-    );
-    await Future.delayed(const Duration(milliseconds: 1500));
-
+    
+    User? user;
+    try {
+      user = await AmsGlobals.sessionService.login(email, password);
+      await Future.delayed(const Duration(milliseconds: 1500));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(e.toString().replaceAll('Exception: ', ''))),
+            ],
+          ),
+          backgroundColor: Colors.red.shade800,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     if (user != null) {
       if (user.role != _role) {

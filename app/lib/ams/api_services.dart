@@ -7,6 +7,7 @@ import 'notification_service.dart';
 import 'globals.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 
 class AuthenticatedClient extends http.BaseClient {
@@ -219,18 +220,32 @@ class ApiSessionService {
 
   Future<User?> login(String email, String password) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      String? deviceId = prefs.getString('ams_device_id');
+      if (deviceId == null) {
+        deviceId = const Uuid().v4();
+        await prefs.setString('ams_device_id', deviceId);
+      }
+
       final response = await httpClient.post(
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({'email': email, 'password': password, 'deviceId': deviceId}),
       );
+      
       if (response.statusCode == 200) {
         final user = User.fromJson(jsonDecode(response.body));
         NotificationService().connectSse(user.id);
         return user;
+      } else if (response.statusCode == 403) {
+        final error = jsonDecode(response.body)['error'];
+        throw Exception(error);
       }
       return null;
     } catch (e) {
+      if (e.toString().contains('bound to another device')) {
+        rethrow;
+      }
       print('LOGIN ERROR: $e');
       return null;
     }

@@ -93,7 +93,8 @@ db.serialize(() => {
     electiveSubject TEXT,
     electiveBatch TEXT,
     fcmToken TEXT,
-    notificationPrefs TEXT
+    notificationPrefs TEXT,
+    deviceId TEXT
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS sessions (

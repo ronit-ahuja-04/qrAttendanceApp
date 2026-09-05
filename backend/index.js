@@ -358,12 +358,26 @@ app.get('/profile-images/:id', (req, res) => {
 });
 
 app.post('/login', loginLimiter, (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, deviceId } = req.body;
   console.log('Login attempt:', email, password);
-  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
+  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
     
+    // Check device binding for students
+    if (row.role === 'student' && process.env.DEVICE_BINDING_ENABLED === 'true') {
+      if (deviceId) {
+        if (!row.deviceId) {
+          // Bind new device
+          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id]);
+          row.deviceId = deviceId;
+        } else if (row.deviceId !== deviceId) {
+          // Mismatch
+          return res.status(403).json({ error: 'Account bound to another device. Please contact faculty to reset.' });
+        }
+      }
+    }
+
     row.branch = 'INFT'; // Hardcode branch for now as per user request
     row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
 
