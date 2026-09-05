@@ -1231,7 +1231,14 @@ app.get('/api/report/bulk-excel', (req, res) => {
 
   // 1. Get all sessions matching criteria
   let q = 'SELECT id, courseCode, batchTarget, createdAt, enrolledStudentIds FROM sessions WHERE (facultyId = ? OR proxyFacultyId = ?) AND LOWER(TRIM(courseCode)) = LOWER(TRIM(?)) AND createdAt >= ? AND createdAt <= ?';
-  let params = [facultyId, facultyId, subject, startDate, endDate];
+  
+  // Ensure date ranges cover the whole day for string comparison
+  const startObj = new Date(startDate);
+  startObj.setHours(0, 0, 0, 0);
+  const endObj = new Date(endDate);
+  endObj.setHours(23, 59, 59, 999);
+  
+  let params = [facultyId, facultyId, subject, startObj.toISOString(), endObj.toISOString()];
   
   if (batchTarget && batchTarget !== 'All') {
     q += ' AND LOWER(TRIM(batchTarget)) = LOWER(TRIM(?))';
