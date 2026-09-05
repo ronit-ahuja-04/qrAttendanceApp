@@ -7,7 +7,7 @@ class MaintenanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.colors.vesitBlue,
+      backgroundColor: context.colors.vesitPrimary,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
