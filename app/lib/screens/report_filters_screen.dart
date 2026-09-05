@@ -24,21 +24,34 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   late List<String> _batchTargets;
   late String _batchTarget;
 
+  void _initSubjects() {
+    final timetableSubjects = AmsGlobals.timetableSlots.map((s) => s['subject'] as String).toList();
+    final customSubjects = AmsGlobals.facultySessions.map((s) => s.courseCode).toList();
+    
+    _subjects = [...timetableSubjects, ...customSubjects].toSet().toList();
+    if (_subjects.isEmpty) _subjects = ['No Subjects'];
+    _subject = _subjects.first;
+  }
+
   @override
   void initState() {
     super.initState();
-    _subjects = AmsGlobals.timetableSlots.map((s) => s['subject'] as String).toSet().toList();
-    if (_subjects.isEmpty) _subjects = ['No Subjects'];
-    _subject = _subjects.first;
+    _initSubjects();
     _updateBatchTargets();
   }
 
   void _updateBatchTargets() {
-    _batchTargets = AmsGlobals.timetableSlots
+    final timetableBatches = AmsGlobals.timetableSlots
         .where((s) => s['subject'] == _subject)
         .map((s) => (s['batchTarget'] as String?) ?? 'All')
-        .toSet()
         .toList();
+        
+    final customBatches = AmsGlobals.facultySessions
+        .where((s) => s.courseCode == _subject)
+        .map((s) => s.batchTarget ?? 'All')
+        .toList();
+
+    _batchTargets = [...timetableBatches, ...customBatches].toSet().toList();
     if (_batchTargets.isEmpty) _batchTargets = ['All'];
     _batchTarget = _batchTargets.first;
   }
