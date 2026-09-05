@@ -1,6 +1,5 @@
 require('dotenv').config();
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const axios = require('axios');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
@@ -1452,21 +1451,25 @@ app.post('/forgot-password', (req, res) => {
             </div>
           `;
 
-        const msg = {
+        const payload = {
           to: row.email,
-          from: process.env.MAIL_USER, // Must match the verified sender in SendGrid
           subject: 'Your AMS Password Reset Code',
           html: htmlBody,
         };
 
-        sgMail.send(msg)
-          .then(() => {
-            console.log(`[RESET] OTP sent to ${row.email}`);
-            res.json({ message: 'Reset code sent to your email' });
+        // Post to the Google Apps Script URL
+        axios.post(process.env.APPS_SCRIPT_URL, payload)
+          .then((response) => {
+            if (response.data.status === 'success') {
+              console.log(`[RESET] OTP sent to ${row.email}`);
+              res.json({ message: 'Reset code sent to your email' });
+            } else {
+              throw new Error(response.data.message || 'Unknown Apps Script error');
+            }
           })
           .catch((mailErr) => {
-            console.error('[MAIL ERROR]', mailErr.response ? mailErr.response.body : mailErr);
-            return res.status(500).json({ error: 'Failed to send reset email via SendGrid API.' });
+            console.error('[MAIL ERROR]', mailErr.message);
+            return res.status(500).json({ error: 'Failed to send reset email via Apps Script.' });
           });
       });
     });
