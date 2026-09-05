@@ -79,6 +79,11 @@ app.get('/api/admin/reset-devices', (req, res) => {
   });
 });
 
+// Health check route for bootloader ping
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 
 // Global logger
 app.use((req, res, next) => {

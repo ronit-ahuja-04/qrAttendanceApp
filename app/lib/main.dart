@@ -140,6 +140,18 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
       print('Bootloader error: $e');
     }
     
+    // Ping backend to check for Maintenance Mode (503)
+    try {
+      final response = await httpClient.get(Uri.parse('$baseUrl/api/health')).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 503) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed('/maintenance');
+        return;
+      }
+    } catch (e) {
+      // Ignore normal connection errors or timeouts, we just want to catch the explicit 503
+    }
+
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
