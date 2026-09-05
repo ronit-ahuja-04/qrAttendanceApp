@@ -361,40 +361,54 @@ app.post('/login', loginLimiter, (req, res) => {
   const { email, password, deviceId } = req.body;
   console.log('Login attempt:', email, password);
   db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(401).json({ error: 'Invalid credentials' });
-    
-    // Check device binding for students
-    if (row.role === 'student') {
-      if (deviceId) {
-        if (!row.deviceId) {
-          // Bind new device
-          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id]);
-          row.deviceId = deviceId;
-        } else if (row.deviceId !== deviceId) {
-          // Mismatch
-          return res.status(403).json({ error: 'Account bound to another device. Please contact faculty to reset.' });
-        }
-      }
-    }
+    // Helper function to finalize login
+    const finalizeLogin = () => {
+      row.branch = 'INFT'; // Hardcode branch for now as per user request
+      row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
 
-    row.branch = 'INFT'; // Hardcode branch for now as per user request
-    row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
-
-    if (row.role === 'faculty') {
-      db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
-        if (err) {
-          console.error("Error fetching scopes:", err);
-          row.scopes = [];
-        } else {
-          row.scopes = scopes;
-        }
+      if (row.role === 'faculty') {
+        db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
+          if (err) {
+            console.error("Error fetching scopes:", err);
+            row.scopes = [];
+          } else {
+            row.scopes = scopes;
+          }
+          row.token = generateToken(row);
+          res.json(row);
+        });
+      } else {
         row.token = generateToken(row);
         res.json(row);
-      });
+      }
+    };
+
+    // Check device binding for students
+    if (row.role === 'student' && deviceId) {
+      if (!row.deviceId) {
+        // Enforce 1-device-to-1-student rule: check if device is already claimed
+        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+          if (err) return res.status(500).json({ error: err.message });
+          if (existing) {
+            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+          }
+          // Bind new device
+          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
+            if (updateErr) return res.status(500).json({ error: 'Failed to bind device' });
+            row.deviceId = deviceId;
+            finalizeLogin();
+          });
+        });
+      } else if (row.deviceId !== deviceId) {
+        // Mismatch
+        return res.status(403).json({ error: 'Account bound to another device. Please contact faculty to reset.' });
+      } else {
+        // Matches successfully
+        finalizeLogin();
+      }
     } else {
-      row.token = generateToken(row);
-      res.json(row);
+      // Faculty or no deviceId provided (shouldn't happen with updated app)
+      finalizeLogin();
     }
   });
 });
