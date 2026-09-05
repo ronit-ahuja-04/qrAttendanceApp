@@ -7,14 +7,14 @@ import 'ams/globals.dart';
 import 'ams/api_services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ams/models.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/faculty_main_layout.dart';
 import 'screens/student_main_layout.dart';
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+import 'ams/globals.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,10 +22,39 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    await NotificationService().init(navigatorKey);
+    // Connect to Notifications stream if user is logged in
+    await NotificationService().init(AmsGlobals.navigatorKey);
   } catch (e) {
     print('Failed to initialize Firebase: $e');
   }
+
+  // Real-time Maintenance Mode Monitor
+  Timer.periodic(const Duration(seconds: 15), (timer) async {
+    try {
+      final response = await httpClient.get(Uri.parse('$baseUrl/api/health')).timeout(const Duration(seconds: 5));
+      final context = AmsGlobals.navigatorKey.currentContext;
+      if (context != null) {
+        bool isMaintenanceRoute = false;
+        Navigator.popUntil(context, (route) {
+          if (route.settings.name == '/maintenance') {
+            isMaintenanceRoute = true;
+          }
+          return true; // Don't actually pop anything
+        });
+
+        if (response.statusCode == 503 && !isMaintenanceRoute) {
+          Navigator.of(context).pushReplacementNamed('/maintenance');
+        } else if (response.statusCode == 200 && isMaintenanceRoute) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      // Ignore network errors, only act on explicit 503 or 200
+    }
+  });
+
   await AmsGlobals.initTheme();
   runApp(const AttendancePortalApp());
 }
@@ -39,7 +68,7 @@ class AttendancePortalApp extends StatelessWidget {
       valueListenable: AmsGlobals.themeNotifier,
       builder: (context, themeMode, child) {
         return MaterialApp(
-          navigatorKey: navigatorKey,
+          navigatorKey: AmsGlobals.navigatorKey,
           title: 'VESIT Attendance Portal',
           debugShowCheckedModeBanner: false,
           routes: {
