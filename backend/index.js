@@ -161,9 +161,6 @@ function sendPushNotification(userId, title, body, payloadData = {}) {
         notification: { title: String(title), body: String(body) },
         data: stringifiedData,
         token: row.fcmToken,
-        android: {
-          priority: 'high'
-        },
         apns: {
           payload: {
             aps: {
