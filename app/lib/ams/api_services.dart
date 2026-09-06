@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'models.dart';
 import 'notification_service.dart';
@@ -320,6 +322,9 @@ class ApiSessionService {
       print('Error deleting FCM token: $e');
     }
     try {
+      if (kIsWeb) {
+        html.window.sessionStorage.remove('ams_user_session');
+      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('ams_user_session');
     } catch (_) {}
