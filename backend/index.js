@@ -1849,7 +1849,11 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
 
 // GET all timetable slots (used by Timetable Manager)
 app.get('/api/timetable', (req, res) => {
-  db.all('SELECT * FROM timetable_slots', (err, rows) => {
+  db.all(`
+    SELECT t.*, u.name as facultyName, u.email as facultyEmail 
+    FROM timetable_slots t 
+    LEFT JOIN users u ON t.facultyId = u.id
+  `, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });

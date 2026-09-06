@@ -115,6 +115,7 @@ class _GlobalConfigureSessionScreenState
 
         final rawYears = _allSlots
             .map((s) => _yearFromBatch(s['batchTarget'] ?? ''))
+            .where((y) => y != 'Other')
             .toSet()
             .toList();
         rawYears.sort();

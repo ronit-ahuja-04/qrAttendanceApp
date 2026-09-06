@@ -102,7 +102,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
       final slots = await ApiSessionService().getTimetable(user.id);
       final sessions = await ApiSessionService().getFacultySessions(user.id);
       final pending =
-          sessions.where((s) => s.approvalStatus == 'pending').toList();
+          sessions.where((s) => s.approvalStatus == 'pending' && s.facultyId == AmsGlobals.loggedInUser?.id).toList();
       if (mounted) {
         setState(() {
           AmsGlobals.timetableSlots.clear();
