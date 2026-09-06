@@ -321,15 +321,8 @@ app.use('/uploads', express.static(uploadsDir));
 // Multer config
 const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
 
-const storage = isProduction ? multer.memoryStorage() : multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, uuidv4() + ext);
-  }
-});
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -498,40 +491,18 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
   const userId = req.params.id;
   let url;
 
-  if (isProduction && admin.apps.length > 0) {
-    try {
-      const bucket = admin.storage().bucket();
-      const ext = path.extname(req.file.originalname);
-      const filename = `profiles/${uuidv4()}${ext}`;
-      await bucket.upload(req.file.path, {
-        destination: filename,
-        metadata: { contentType: req.file.mimetype },
-      });
-      
-      url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
-    } catch (e) {
-      console.error("Firebase Storage Upload Error:", e);
-      return res.status(500).json({ error: "Cloud storage upload failed." });
-    }
-  } else {
-    // Fallback: Use Base64 if memory storage was used to avoid ephemeral disk loss on Render
-    if (!req.file.filename && req.file.buffer) {
-      const base64Data = req.file.buffer.toString('base64');
-      const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
-      
-      db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [dataUri, userId], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ profilePictureUrl: formatProfilePictureUrl(dataUri, userId) });
-      });
-      return;
-    } else {
-      url = `/uploads/${req.file.filename}`;
-    }
+  if (!req.file.buffer) {
+    return res.status(500).json({ error: "Memory storage not configured correctly." });
   }
 
-  db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [url, userId], function (err) {
+  // Bypass Firebase Storage completely to avoid Blaze plan requirements.
+  // Save directly as a highly compressed Base64 Data URI in the Turso database.
+  const base64Data = req.file.buffer.toString('base64');
+  const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
+  
+  db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [dataUri, userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ profilePictureUrl: formatProfilePictureUrl(url, userId) });
+    res.json({ profilePictureUrl: formatProfilePictureUrl(dataUri, userId) });
   });
 });
 
