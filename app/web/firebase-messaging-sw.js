@@ -21,7 +21,8 @@ messaging.onBackgroundMessage((payload) => {
     let notificationTitle = payload.notification?.title || 'Notification';
     let notificationOptions = {
         body: payload.notification?.body || '',
-        icon: '/favicon.png', // Fallback icon
+        icon: '/icons/Icon-192.png', // Use college logo
+        badge: '/icons/Icon-192.png', // Badge for Android status bar
         data: payload.data
     };
 

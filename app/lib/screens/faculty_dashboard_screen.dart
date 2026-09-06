@@ -70,7 +70,11 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     super.initState();
     _loadTimetable();
     _eventSub = NotificationService().events.listen((event) {
-      if (event['type'] == 'TIMETABLE_UPDATED') {
+      if (event['type'] == 'TIMETABLE_UPDATED' || 
+          event['type'] == 'PROXY_APPROVAL_REQUIRED' || 
+          event['type'] == 'PROXY_APPROVED' || 
+          event['type'] == 'PROXY_DECLINED' || 
+          event['type'] == 'PROXY_AUTO_APPROVED') {
         _loadTimetable();
       }
     });
@@ -1107,6 +1111,9 @@ class _UpcomingSessionsList extends StatelessWidget {
 
 
                     if (session['_hasSession'] == true) {
+                      final sData = session['_sessionData'];
+                      final isProxy = sData?.proxyFacultyId != null && sData?.proxyFacultyId != sData?.facultyId;
+                      final textLabel = isProxy ? 'Session was proxied' : 'Session attendance marked successfully';
                       return ElevatedButton(
                         onPressed: null,
                         style: ElevatedButton.styleFrom(
@@ -1116,8 +1123,8 @@ class _UpcomingSessionsList extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Session attendance marked successfully',
-                            style: TextStyle(
+                        child: Text(textLabel,
+                            style: const TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold)),
                       );
                     }
@@ -1365,7 +1372,13 @@ class _RecentSessionsList extends StatelessWidget {
       );
     }
 
-    final recentSessions = sessions.where((s) => s.status == SessionStatus.closed || s.status == SessionStatus.active || s.status == SessionStatus.completed).toList();
+    final currentUserId = AmsGlobals.loggedInUser?.id;
+    final recentSessions = sessions.where((s) {
+      if (s.status != SessionStatus.closed && s.status != SessionStatus.active && s.status != SessionStatus.completed) return false;
+      // Hide from proxy's view AFTER submission, unless they get the credit (facultyId becomes them)
+      if (s.proxyFacultyId == currentUserId && s.facultyId != currentUserId && s.status != SessionStatus.active) return false;
+      return true;
+    }).toList();
     recentSessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final topSessions = recentSessions.take(5).toList();
 
@@ -1391,8 +1404,10 @@ class _RecentSessionsList extends StatelessWidget {
         final timeStr = DateFormat('h:mm a').format(session.createdAt);
         final dateStr = DateFormat('MMM d, yyyy').format(session.createdAt);
 
+        final currentUserId = AmsGlobals.loggedInUser?.id;
         final isProxiedBySomeoneElse = session.proxyFacultyId != null && session.proxyFacultyId != session.facultyId;
-        final isPendingProxy = isProxiedBySomeoneElse && session.approvalStatus == 'pending';
+        final isMyProxyToApprove = isProxiedBySomeoneElse && session.facultyId == currentUserId;
+        final isPendingProxy = isMyProxyToApprove && session.approvalStatus == 'pending';
         
         final isProxiedByMeAndWonCredit = session.proxyFacultyId != null && session.proxyFacultyId == session.facultyId;
         final displayCourseCode = isProxiedByMeAndWonCredit ? '${session.courseCode} (Proxied)' : session.courseCode;
@@ -1412,7 +1427,7 @@ class _RecentSessionsList extends StatelessWidget {
             onTap: () {},
             actionLabel: isPendingProxy
                 ? 'Approve'
-                : (session.status == SessionStatus.active ? 'Force Close' : 'View Report'),
+                : (session.status == SessionStatus.active ? '' : 'View Report'),
             onAction: isPendingProxy
                 ? () async {
                     await AmsGlobals.runWithLoading(context, () async {
@@ -1420,17 +1435,10 @@ class _RecentSessionsList extends StatelessWidget {
                       onRefresh();
                     });
                   }
-                : () async {
-                    if (session.status == SessionStatus.active) {
-                      await AmsGlobals.runWithLoading(context, () async {
-                        await AmsGlobals.sessionService.closeSession(session.id);
-                        onRefresh();
-                      });
-                    } else {
-                      Navigator.of(context).push(MaterialPageRoute(
+                : (session.status == SessionStatus.active ? null : () async {
+                    Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => ReportDetailScreen(session: session)));
-                    }
-                  },
+                  }),
             onReject: isPendingProxy
                 ? () async {
                     await AmsGlobals.runWithLoading(context, () async {
