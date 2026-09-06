@@ -29,8 +29,13 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   }
 
   void _initSubjects() {
+    final myId = AmsGlobals.loggedInUser?.id;
     final timetableSubjects = AmsGlobals.timetableSlots.map((s) => _cleanSubject(s['subject'] as String)).toList();
-    final customSubjects = AmsGlobals.facultySessions.map((s) => _cleanSubject(s.courseCode)).toList();
+    // Only include subjects from sessions where this faculty is the actual teacher (not a proxy)
+    final customSubjects = AmsGlobals.facultySessions
+        .where((s) => s.facultyId == myId)
+        .map((s) => _cleanSubject(s.courseCode))
+        .toList();
     
     _subjects = [...timetableSubjects, ...customSubjects].toSet().toList();
     _subjects.sort();
@@ -46,13 +51,15 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   }
 
   void _updateBatchTargets() {
+    final myId = AmsGlobals.loggedInUser?.id;
     final timetableBatches = AmsGlobals.timetableSlots
         .where((s) => _cleanSubject(s['subject']) == _subject)
         .map((s) => (s['batchTarget'] as String?) ?? 'All')
         .toList();
         
+    // Only include batches from sessions where this faculty is the actual teacher (not a proxy)
     final customBatches = AmsGlobals.facultySessions
-        .where((s) => _cleanSubject(s.courseCode) == _subject)
+        .where((s) => s.facultyId == myId && _cleanSubject(s.courseCode) == _subject)
         .map((s) => s.batchTarget ?? 'All')
         .toList();
 
