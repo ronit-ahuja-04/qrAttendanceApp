@@ -271,86 +271,53 @@ class NotificationService {
   }
 
   void _showInAppBubble(OverlayState overlayState, {required String title, required String body, String? payload}) {
+    final context = _navigatorKey?.currentState?.context;
+    if (context == null) return;
+    
     try {
-      late OverlayEntry overlayEntry;
+      final isWebDesktop = kIsWeb && MediaQuery.of(context).size.width > 800;
       
-      overlayEntry = OverlayEntry(
-        builder: (context) {
-          final isWebDesktop = kIsWeb && MediaQuery.of(context).size.width > 800;
-          return Positioned(
-            top: isWebDesktop ? null : MediaQuery.of(context).padding.top + 16,
-            bottom: isWebDesktop ? 24 : null,
-            right: isWebDesktop ? 24 : 16,
-            left: isWebDesktop ? null : 16,
-            width: isWebDesktop ? 400 : null,
-            child: Material(
-            color: Colors.transparent,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: -100.0, end: 0.0),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) {
-                return Transform.translate(
-                  offset: Offset(0, value),
-                  child: Opacity(
-                    opacity: (1 - (value / -100)).clamp(0.0, 1.0),
-                    child: child,
-                  ),
-                );
-              },
-              child: GestureDetector(
-                onTap: () {
-                  overlayEntry.remove();
-                  if (payload != null) {
-                    _onTap(NotificationResponse(notificationResponseType: NotificationResponseType.selectedNotification, payload: payload));
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B), // Sleek dark slate bubble
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF002147).withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.notifications_active, color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 4),
-                            Text(body, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF002147).withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.notifications_active, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(body, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
-        );
-      },
-    );
-
-      overlayState.insert(overlayEntry);
-      
-      // Auto-dismiss after 4 seconds
-      Future.delayed(const Duration(seconds: 4), () {
-        if (overlayEntry.mounted) overlayEntry.remove();
-      });
+          backgroundColor: const Color(0xFF1E293B),
+          behavior: SnackBarBehavior.floating,
+          width: isWebDesktop ? 450 : null,
+          margin: isWebDesktop ? null : const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          duration: const Duration(seconds: 4),
+          action: payload != null ? SnackBarAction(
+            label: 'VIEW',
+            textColor: const Color(0xFFFFB300),
+            onPressed: () {
+              _onTap(NotificationResponse(notificationResponseType: NotificationResponseType.selectedNotification, payload: payload));
+            },
+          ) : null,
+        ),
+      );
     } catch (e) {
       print('Failed to show in-app bubble: $e');
     }
