@@ -147,20 +147,34 @@ function sendPushNotification(userId, title, body, payloadData = {}) {
         if (type === 'TIMETABLE_UPDATED' && prefs.notif_alerts === false) return;
       }
       
+      // Ensure all data values are strings (required by FCM)
+      const stringifiedData = {};
+      if (payloadData) {
+        for (const [k, v] of Object.entries(payloadData)) {
+          if (v !== undefined && v !== null) {
+            stringifiedData[k] = String(v);
+          }
+        }
+      }
+
       const message = {
-        notification: { title, body },
-        data: payloadData,
+        notification: { title: String(title), body: String(body) },
+        data: stringifiedData,
         token: row.fcmToken,
         android: {
           priority: 'high',
           notification: {
             channelId: 'ams_channel_id',
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+            defaultSound: true,
+            defaultVibrateTimings: true,
           }
         },
         apns: {
           payload: {
             aps: {
               sound: 'default',
+              contentAvailable: true,
             }
           }
         }
