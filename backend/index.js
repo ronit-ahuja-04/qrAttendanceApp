@@ -155,19 +155,14 @@ function sendPushNotification(userId, title, body, payloadData = {}) {
           }
         }
       }
+      stringifiedData['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
 
       const message = {
         notification: { title: String(title), body: String(body) },
         data: stringifiedData,
         token: row.fcmToken,
         android: {
-          priority: 'high',
-          notification: {
-            channelId: 'ams_channel_id',
-            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-            defaultSound: true,
-            defaultVibrateTimings: true,
-          }
+          priority: 'high'
         },
         apns: {
           payload: {
