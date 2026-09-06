@@ -519,7 +519,7 @@ function getSessionTargetStudents(courseCode, batchTarget) {
   const isCrossDivision = target.startsWith('TE -'); // e.g. "TE - ADMT (Batch A)"
 
   if (isAdmt) {
-    whereClause += " AND electiveSubject = 'Advanced Database Management Technologies'";
+    whereClause += " AND (electiveSubject = 'Advanced Database Management Technologies' OR electiveSubject = 'ADMT')";
     if (target.includes('Batch A')) whereClause += " AND electiveBatch = 'Batch A'";
     else if (target.includes('Batch B')) whereClause += " AND electiveBatch = 'Batch B'";
     else if (target.includes('Batch C')) whereClause += " AND electiveBatch = 'Batch C'";
