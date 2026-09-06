@@ -481,11 +481,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     if (validScopes.isNotEmpty) {
       _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? 'Unknown Batch').toSet().toList()..sort();
       
-      // EXCEPTION: Only ADMT/Database lectures can target specific Batches. Other lectures should not show Batch in the dropdown.
-      if (_type.toLowerCase() == 'lecture' && !_subject.toLowerCase().contains('admt') && !_subject.toLowerCase().contains('database')) {
-        _batches = _batches.where((b) => !b.toLowerCase().contains('batch')).toList();
-        if (_batches.isEmpty) _batches = ['Unknown Batch'];
-      }
+
 
       if (!_batches.contains(_batch)) {
         if (_type.toLowerCase() == 'lecture') {
@@ -549,18 +545,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       return;
     }
 
-    if (_type.toLowerCase() == 'lecture' && _batch.toLowerCase().contains('batch') && !_subject.toLowerCase().contains('admt') && !_subject.toLowerCase().contains('database')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mismatch: Lectures are for the entire division/elective, except for ADMT.'),
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(top: 50, left: 20, right: 20),
-          dismissDirection: DismissDirection.up,
-        ),
-      );
-      return;
-    }
+
 
     // Auto-calculate end time based on type (Lecture = 1 hr, Lab = 2 hrs)
     final durationHrs = _type == 'Lab' ? 2 : 1;
