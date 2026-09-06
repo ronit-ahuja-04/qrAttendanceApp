@@ -179,6 +179,10 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
             MaterialPageRoute(builder: (_) => const StudentMainLayout()),
           );
         }
+        
+        Future.delayed(const Duration(milliseconds: 300), () {
+          NotificationService().handlePendingNotification();
+        });
         return;
       }
     } catch (e) {

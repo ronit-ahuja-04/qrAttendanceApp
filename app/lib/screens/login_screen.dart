@@ -164,9 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
         user.id,
         {
           'notif_master': pushEnabled,
-          'notif_alerts': prefs.getBool('notif_alerts') ?? true,
-          'notif_proxy': prefs.getBool('notif_proxy') ?? true,
-          'notif_attendance': prefs.getBool('notif_attendance') ?? true,
         }
       );
       
@@ -178,6 +175,10 @@ class _LoginScreenState extends State<LoginScreen> {
               : const FacultyMainLayout(),
         ),
       );
+      
+      Future.delayed(const Duration(milliseconds: 300), () {
+        NotificationService().handlePendingNotification();
+      });
     } else {
       if (!mounted) return;
       setState(() => _isLoading = false);

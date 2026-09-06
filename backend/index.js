@@ -141,10 +141,9 @@ function sendPushNotification(userId, title, body, payloadData = {}) {
       }
       
       const type = payloadData.type;
-      if (type) {
-        if (type.startsWith('PROXY_') && prefs.notif_proxy === false) return;
-        if (type === 'ATTENDANCE_UPDATED' && prefs.notif_attendance === false) return;
-        if (type === 'TIMETABLE_UPDATED' && prefs.notif_alerts === false) return;
+      if (prefs.notif_master === false) {
+        console.log(`Skipping notification for ${userId} (master toggle off)`);
+        return;
       }
       
       // Ensure all data values are strings (required by FCM)

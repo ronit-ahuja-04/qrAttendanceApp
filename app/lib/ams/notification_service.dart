@@ -8,6 +8,11 @@ import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../screens/notifications_screen.dart';
+import '../screens/faculty_readonly_timetable_screen.dart';
+import '../screens/student_timetable_screen.dart';
+import '../screens/proxy_approvals_screen.dart';
+import '../screens/attendance_history_screen.dart';
+import '../screens/faculty_session_history_screen.dart';
 import '../theme/app_colors.dart';
 import 'api_services.dart';
 import 'globals.dart';
@@ -126,12 +131,9 @@ class NotificationService {
     // Handle tapping a terminated notification (app completely killed)
     FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
       if (message != null && message.data.isNotEmpty) {
-        // Wait a tiny bit for the UI to mount before navigating
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _onTap(NotificationResponse(
-              notificationResponseType: NotificationResponseType.selectedNotification, 
-              payload: jsonEncode(message.data)));
-        });
+        _onTap(NotificationResponse(
+            notificationResponseType: NotificationResponseType.selectedNotification, 
+            payload: jsonEncode(message.data)));
       }
     });
 
@@ -158,14 +160,55 @@ class NotificationService {
 
   void _onTap(NotificationResponse response) {
     if (response.payload != null) {
-      final context = _navigatorKey?.currentState?.context;
-      if (context == null) return;
-      
-      try {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-      } catch (e) {
-        print('Error handling notification tap: $e');
+      if (AmsGlobals.loggedInUser == null) {
+        // App is still booting/logging in. Save for later.
+        AmsGlobals.pendingNotificationPayload = response.payload;
+        return;
       }
+      
+      _navigateFromPayload(response.payload!);
+    }
+  }
+
+  void handlePendingNotification() {
+    if (AmsGlobals.pendingNotificationPayload != null) {
+      _navigateFromPayload(AmsGlobals.pendingNotificationPayload!);
+      AmsGlobals.pendingNotificationPayload = null;
+    }
+  }
+
+  void _navigateFromPayload(String payload) {
+    final context = _navigatorKey?.currentState?.context;
+    if (context == null) return;
+    
+    try {
+      final data = jsonDecode(payload);
+      final type = data['type'] as String?;
+      final role = AmsGlobals.loggedInUser?.role;
+      
+      if (type == 'TIMETABLE_UPDATED') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => role == 'faculty' ? const FacultyReadonlyTimetableScreen() : const StudentTimetableScreen()
+        ));
+      } else if (type != null && type.startsWith('PROXY_')) {
+        if (role == 'faculty') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProxyApprovalsScreen()));
+        }
+      } else if (type == 'ATTENDANCE_MARKED') {
+        if (role == 'student') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen(scrollController: null)));
+        }
+      } else if (type == 'ATTENDANCE_SUBMITTED') {
+        if (role == 'faculty') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultySessionHistoryScreen()));
+        }
+      } else {
+        // Fallback to inbox
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+      }
+    } catch (e) {
+      print('Error handling notification tap routing: $e');
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
     }
   }
 
@@ -190,22 +233,7 @@ class NotificationService {
       return;
     }
 
-    // Granular Faculty Settings
-    if (payload != null) {
-      try {
-        final event = jsonDecode(payload);
-        final type = event['type'] as String?;
-        if (type == 'N006') { // Lecture/Lab Alerts
-          if (!(prefs.getBool('notif_alerts') ?? true)) return;
-        } else if (type == 'N008') { // Proxy Approvals
-          if (!(prefs.getBool('notif_proxy') ?? true)) return;
-        } else if (type == 'N007') { // Attendance Reports
-          if (!(prefs.getBool('notif_attendance') ?? true)) return;
-        }
-      } catch (e) {
-        print('Failed to parse payload for notification filtering: $e');
-      }
-    }
+    // Granular logic has been removed. Only master toggle applies.
 
     final context = _navigatorKey?.currentState?.context;
     final overlay = _navigatorKey?.currentState?.overlay;
@@ -227,6 +255,7 @@ class NotificationService {
               color: Color(0xFF002147),
               enableVibration: true,
               playSound: true,
+              fullScreenIntent: true,
               showWhen: true);
               
       const NotificationDetails platformChannelSpecifics =

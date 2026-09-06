@@ -17,11 +17,6 @@ class FacultyNotificationSettingsScreen extends StatefulWidget {
 }
 
 class _FacultyNotificationSettingsScreenState extends State<FacultyNotificationSettingsScreen> {
-  // Notification Preferences
-  bool _alertsEnabled = true;
-  bool _proxyEnabled = true;
-  bool _attendanceEnabled = true;
-
   bool _pushEnabled = true;
 
   @override
@@ -34,9 +29,6 @@ class _FacultyNotificationSettingsScreenState extends State<FacultyNotificationS
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _pushEnabled = prefs.getBool('notif_master') ?? true;
-      _alertsEnabled = prefs.getBool('notif_alerts') ?? true;
-      _proxyEnabled = prefs.getBool('notif_proxy') ?? true;
-      _attendanceEnabled = prefs.getBool('notif_attendance') ?? true;
     });
   }
 
@@ -52,9 +44,6 @@ class _FacultyNotificationSettingsScreenState extends State<FacultyNotificationS
         AmsGlobals.loggedInUser!.id,
         {
           'notif_master': _pushEnabled,
-          'notif_alerts': _alertsEnabled,
-          'notif_proxy': _proxyEnabled,
-          'notif_attendance': _attendanceEnabled,
         },
       );
     }
@@ -102,47 +91,6 @@ class _FacultyNotificationSettingsScreenState extends State<FacultyNotificationS
                     icon: Icons.notifications_active,
                     value: _pushEnabled,
                     onChanged: _toggleMasterPush,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'CHOOSE WHAT YOU GET NOTIFIED ABOUT (IN-APP)',
-                    style: context.textStyles.vesitLabelBold.copyWith(color: Colors.grey.shade600, letterSpacing: 1.2),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  _ToggleCard(
-                    title: 'Lecture/Lab Alerts',
-                    subtitle: 'Get reminded 15 mins before your scheduled classes.',
-                    icon: Icons.alarm,
-                    value: _alertsEnabled,
-                    onChanged: (v) {
-                      setState(() => _alertsEnabled = v);
-                      _savePreference('notif_alerts', v);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  _ToggleCard(
-                    title: 'Proxy Approvals',
-                    subtitle: 'Get notified when your proxy requests are accepted or rejected.',
-                    icon: Icons.check_circle_outline,
-                    value: _proxyEnabled,
-                    onChanged: (v) {
-                      setState(() => _proxyEnabled = v);
-                      _savePreference('notif_proxy', v);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  _ToggleCard(
-                    title: 'Attendance Reports',
-                    subtitle: 'Receive daily summaries of your marked attendance sessions.',
-                    icon: Icons.analytics_outlined,
-                    value: _attendanceEnabled,
-                    onChanged: (v) {
-                      setState(() => _attendanceEnabled = v);
-                      _savePreference('notif_attendance', v);
-                    },
                   ),
                 ],
               ),
