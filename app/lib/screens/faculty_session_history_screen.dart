@@ -42,7 +42,7 @@ class _FacultySessionHistoryScreenState extends State<FacultySessionHistoryScree
     final allSessions = await AmsGlobals.sessionService.getFacultySessions(AmsGlobals.loggedInUser!.id);
     
     // Only show completed sessions in history
-    _sessions = allSessions.where((s) => s.status == SessionStatus.closed).toList();
+    _sessions = allSessions.where((s) => s.status == SessionStatus.completed).toList();
     
     // Sort by most recent first
     _sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));

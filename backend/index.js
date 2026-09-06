@@ -1657,7 +1657,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
            u.name as facultyName
     FROM sessions s
     LEFT JOIN users u ON s.facultyId = u.id
-    WHERE s.status IN ('active', 'closed')
+    WHERE s.status IN ('active', 'closed', 'completed')
       AND s.approvalStatus = 'approved'
       AND s.enrolledStudentIds LIKE ?
     ORDER BY s.createdAt DESC
