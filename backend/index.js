@@ -150,7 +150,20 @@ function sendPushNotification(userId, title, body, payloadData = {}) {
       const message = {
         notification: { title, body },
         data: payloadData,
-        token: row.fcmToken
+        token: row.fcmToken,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'ams_channel_id',
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            }
+          }
+        }
       };
       
       admin.messaging().send(message)
