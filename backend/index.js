@@ -1422,51 +1422,73 @@ app.get('/api/report/bulk-excel', (req, res) => {
         const workbook = new exceljs.Workbook();
         const worksheet = workbook.addWorksheet('Bulk Report');
 
-        // Dynamic Columns
-        const columns = [
-          { header: 'Roll No', key: 'rollNo', width: 15 },
-          { header: 'Name', key: 'name', width: 25 }
-        ];
+        // Metadata rows
+        const subjectRow = ['Subject', '', ...sessions.map(s => s.courseCode), '', '', ''];
+        const typeRow    = ['Type', '', ...sessions.map(s => {
+          let typeStr = s.batchTarget && s.batchTarget.includes('All') ? 'Lecture' : 'Lab';
+          if (s.courseCode.includes(' - ')) typeStr = s.courseCode.split(' - ').pop();
+          return typeStr;
+        }), '', '', ''];
+        const dayRow     = ['Day', '', ...sessions.map(s => new Date(s.createdAt).toLocaleDateString('en-US', { weekday: 'long' })), '', '', ''];
+        const dateRow    = ['Date', '', ...sessions.map(s => new Date(s.createdAt).toLocaleDateString('en-GB')), '', '', ''];
+        const timeRow    = ['Time', '', ...sessions.map(s => new Date(s.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })), '', '', ''];
+        
+        const headerRow  = ['Roll No', 'Name', ...sessions.map((s, i) => `Session ${i+1}`), 'Total Sessions', 'Total Present', 'Attendance %'];
 
-        sessions.forEach((s, index) => {
-          const dateStr = new Date(s.createdAt).toLocaleDateString('en-GB');
-          const typeStr = s.batchTarget && s.batchTarget.includes('All') ? 'Lec' : 'Lab';
-          columns.push({ header: `${typeStr} ${index+1} (${dateStr})`, key: `session_${s.id}`, width: 18 });
-        });
+        worksheet.addRow(subjectRow);
+        worksheet.addRow(typeRow);
+        worksheet.addRow(dayRow);
+        worksheet.addRow(dateRow);
+        worksheet.addRow(timeRow);
+        worksheet.addRow(headerRow);
 
-        columns.push({ header: 'Total Sessions', key: 'totalSessions', width: 15 });
-        columns.push({ header: 'Total Present', key: 'totalPresent', width: 15 });
-        columns.push({ header: 'Attendance %', key: 'percentage', width: 15 });
+        // Style the metadata and header rows
+        for (let i = 1; i <= 6; i++) {
+           worksheet.getRow(i).font = { bold: true };
+           if (i === 6) { // Only fill the actual column headers
+               worksheet.getRow(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+           }
+        }
 
-        worksheet.columns = columns;
+        // Merge cells for the first two columns in metadata rows to make them look like headers
+        for (let i = 1; i <= 5; i++) {
+           worksheet.mergeCells(`A${i}:B${i}`);
+           worksheet.getCell(`A${i}`).alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+
+        // Set column widths
+        worksheet.getColumn(1).width = 15; // Roll No
+        worksheet.getColumn(2).width = 25; // Name
+        for (let i = 0; i < sessions.length; i++) {
+          worksheet.getColumn(3 + i).width = 20; // Sessions
+          worksheet.getColumn(3 + i).alignment = { horizontal: 'center' };
+        }
+        worksheet.getColumn(3 + sessions.length).width = 15;
+        worksheet.getColumn(3 + sessions.length + 1).width = 15;
+        worksheet.getColumn(3 + sessions.length + 2).width = 15;
 
         // Rows
         students.forEach(student => {
-          const rowData = {
-            rollNo: student.rollNo || 'N/A',
-            name: student.name || 'Unknown'
-          };
-
+          const rowData = [student.rollNo || 'N/A', student.name || 'Unknown'];
           let presentCount = 0;
 
           sessions.forEach(s => {
             const status = (attendanceMap[student.id] && attendanceMap[student.id][s.id]) || 'absent';
-            rowData[`session_${s.id}`] = status === 'present' ? 'P' : 'A';
+            rowData.push(status === 'present' ? 'P' : 'A');
             if (status === 'present') presentCount++;
           });
 
           const totalSessions = sessions.length;
-          rowData.totalSessions = totalSessions;
-          rowData.totalPresent = presentCount;
-          rowData.percentage = totalSessions === 0 ? '0%' : `${Math.round((presentCount / totalSessions) * 100)}%`;
+          rowData.push(totalSessions, presentCount, totalSessions === 0 ? '0%' : `${Math.round((presentCount / totalSessions) * 100)}%`);
 
           worksheet.addRow(rowData);
         });
 
         // Apply strict password protection
-        worksheet.columns.forEach(col => {
-          col.protection = { locked: true };
-        });
+        const colCount = 5 + sessions.length;
+        for (let i = 1; i <= colCount; i++) {
+          worksheet.getColumn(i).protection = { locked: true };
+        }
 
         await worksheet.protect('vesit123', {
           selectLockedCells: true,
