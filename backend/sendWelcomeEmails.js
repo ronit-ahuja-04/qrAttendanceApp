@@ -38,15 +38,24 @@ async function main() {
 
     for (const user of users) {
       // 1. Generate password based on role
-      const fullNameNoSpaces = user.name.replace(/\s+/g, ''); // Removes all spaces from full name
-      const firstNameForEmail = user.name.split(' ')[0]; // Still use first name for the "Hi X" greeting
+      const toPascalCase = (str) => {
+        return str.split(' ').map(word => {
+          if (!word) return '';
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join('');
+      };
+      
+      const fullNamePascal = toPascalCase(user.name);
+      
+      // Use the first word in PascalCase for the "Hi X" greeting email
+      const firstNameForEmail = fullNamePascal.replace(/([A-Z])/g, ' $1').trim().split(' ')[0] || user.name.split(' ')[0];
       
       let newPassword = '';
       
       if (user.role === 'student') {
-        newPassword = `${fullNameNoSpaces}@${user.rollNo}`;
+        newPassword = `${fullNamePascal}@${user.rollNo}`;
       } else if (user.role === 'faculty' || user.role === 'admin') {
-        newPassword = `${fullNameNoSpaces}@vesit`;
+        newPassword = `${fullNamePascal}@vesit`;
       } else {
         continue;
       }
