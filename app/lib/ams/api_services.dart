@@ -21,15 +21,9 @@ class AuthenticatedClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJsonStr = prefs.getString('ams_user_session');
-    if (userJsonStr != null) {
-      try {
-        final Map<String, dynamic> userMap = jsonDecode(userJsonStr);
-        if (userMap['token'] != null) {
-          request.headers['Authorization'] = 'Bearer ${userMap['token']}';
-        }
-      } catch (e) {}
+    final token = AmsGlobals.loggedInUser?.token;
+    if (token != null && token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
     }
     
     final response = await _inner.send(request);

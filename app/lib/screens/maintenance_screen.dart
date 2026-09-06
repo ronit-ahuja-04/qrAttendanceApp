@@ -88,26 +88,12 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> with SingleTicker
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // College Logo
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: context.colors.vesitGold.withOpacity(0.3),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: Image.asset(
-                              'assets/images/logo.png',
-                              height: 80,
-                              width: 80,
-                              fit: BoxFit.contain,
-                            ),
+                          // College Logo (App Icon)
+                          Image.asset(
+                            'assets/images/launcher_icon.png',
+                            height: 100,
+                            width: 100,
+                            fit: BoxFit.contain,
                           ),
                           const SizedBox(height: 32),
                           
