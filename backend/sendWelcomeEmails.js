@@ -38,24 +38,30 @@ async function main() {
 
     for (const user of users) {
       // 1. Generate password based on role
-      const toPascalCase = (str) => {
-        return str.split(' ').map(word => {
-          if (!word) return '';
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        }).join('');
-      };
+      const parts = user.name.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+      let firstLastPascal = '';
+      let firstNameForEmail = parts[0];
       
-      const fullNamePascal = toPascalCase(user.name);
-      
-      // Use the first word in PascalCase for the "Hi X" greeting email
-      const firstNameForEmail = fullNamePascal.replace(/([A-Z])/g, ' $1').trim().split(' ')[0] || user.name.split(' ')[0];
+      if (user.role === 'student' && parts.length >= 2) {
+        // Students in DB are "LastName FirstName MiddleName"
+        const lastName = parts[0];
+        const firstName = parts[1];
+        firstLastPascal = `${firstName}${lastName}`;
+        firstNameForEmail = firstName; // Use correct first name for the greeting
+      } else {
+        // Faculty in DB are "FirstName LastName"
+        const firstName = parts[0];
+        const lastName = parts.length > 1 ? parts[1] : '';
+        firstLastPascal = `${firstName}${lastName}`;
+        firstNameForEmail = firstName;
+      }
       
       let newPassword = '';
       
       if (user.role === 'student') {
-        newPassword = `${fullNamePascal}@${user.rollNo}`;
+        newPassword = `${firstLastPascal}@${user.rollNo}`;
       } else if (user.role === 'faculty' || user.role === 'admin') {
-        newPassword = `${fullNamePascal}@vesit`;
+        newPassword = `${firstLastPascal}@vesit`;
       } else {
         continue;
       }
