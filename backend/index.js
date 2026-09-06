@@ -519,7 +519,7 @@ function getSessionTargetStudents(courseCode, batchTarget) {
   const isCrossDivision = target.startsWith('TE -'); // e.g. "TE - ADMT (Batch A)"
 
   if (isAdmt) {
-    whereClause += " AND electiveSubject = 'ADMT'";
+    whereClause += " AND electiveSubject = 'Advanced Database Management Technologies'";
     if (target.includes('Batch A')) whereClause += " AND electiveBatch = 'Batch A'";
     else if (target.includes('Batch B')) whereClause += " AND electiveBatch = 'Batch B'";
     else if (target.includes('Batch C')) whereClause += " AND electiveBatch = 'Batch C'";
@@ -705,18 +705,7 @@ app.post('/sessions', (req, res) => {
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
             
-            if (isProxy && creditToProxy) {
-              const notifId = uuidv4();
-              db.get('SELECT name FROM users WHERE id = ?', [proxyFacultyId], (err, row) => {
-                 const proxyName = row ? row.name : proxyFacultyId;
-                 const title = 'Slot Cancelled';
-                 const body = `Your lecture for ${courseCode} at ${batchTarget} was taken over by ${proxyName}.`;
-                 db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                   [notifId, scopeFacultyId, title, body, 'Cancelled', 'errorContainer', 'onErrorContainer', proxyName, 'cancel', now]);
-                 sendPushNotification(scopeFacultyId, title, body, { type: 'PROXY_SLOT_CANCELLED' });
-              });
-            }
-            
+            // Removed PROXY_SLOT_CANCELLED logic as per user request
             res.json({ id, courseCode, facultyId: finalFacultyId, proxyFacultyId, status: 'scheduled', enrolledStudentIds: enrolledIds, createdAt: now, approvalStatus });
           }
         );
@@ -800,53 +789,52 @@ app.put('/api/sessions/:id/approve', (req, res) => {
 // 4.2) Decline Proxy Session
 app.put('/api/sessions/:id/decline', (req, res) => {
   const { id } = req.params;
-  // Revert credit to proxy faculty instead of just declining
-  db.get('SELECT proxyFacultyId, facultyId, courseCode FROM sessions WHERE id = ?', [id], (err, sessionRow) => {
+  db.get('SELECT proxyFacultyId, facultyId, courseCode, batchTarget FROM sessions WHERE id = ?', [id], (err, sessionRow) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!sessionRow) return res.status(404).json({ error: 'Session not found' });
     
-    db.run(`UPDATE sessions SET facultyId = proxyFacultyId, approvalStatus = 'approved' WHERE id = ?`, [id], function (err) {
+    // Check if it is a Lab or Lecture based on batchTarget
+    const isLab = sessionRow.batchTarget && sessionRow.batchTarget.includes('Batch');
+    
+    if (isLab) {
+      // Labs always default credit to Original Faculty on decline
+      finalizeDecline(id, sessionRow, sessionRow.facultyId);
+    } else {
+      // Lectures: Check if proxy faculty teaches this subject to this class division
+      db.get(`SELECT id FROM timetable_slots WHERE facultyId = ? AND subject = ? AND batchTarget = ? LIMIT 1`,
+        [sessionRow.proxyFacultyId, sessionRow.courseCode, sessionRow.batchTarget], 
+        (err, row) => {
+          if (row) {
+            // Proxy teaches this subject to this class, so credit goes to Proxy
+            finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId);
+          } else {
+            // Proxy does not teach it (e.g., Assistant), credit defaults to Original Faculty
+            finalizeDecline(id, sessionRow, sessionRow.facultyId);
+          }
+      });
+    }
+  });
+
+  function finalizeDecline(sessionId, sessionRow, finalCreditId) {
+    db.run(`UPDATE sessions SET facultyId = ?, approvalStatus = 'approved' WHERE id = ?`, [finalCreditId, sessionId], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       
       const now = new Date().toISOString();
       db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, fac) => {
          const facName = fac ? fac.name : sessionRow.facultyId;
-         const title = 'Proxy Declined (Credit Reverted)';
-         const body = `${facName} declined the proxy. The credit for ${sessionRow.courseCode} has been reverted to you.`;
+         const title = 'Proxy Declined';
+         const body = `${facName} declined the proxy for ${sessionRow.courseCode}.`;
          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-           [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Reverted', 'tertiaryContainer', 'onTertiaryContainer', facName, 'undo', now]);
+           [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Declined', 'tertiaryContainer', 'onTertiaryContainer', facName, 'undo', now]);
          sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_DECLINED' });
       });
       
-      res.json({ success: true, message: 'Session declined and credit reverted to proxy successfully' });
+      res.json({ success: true, message: 'Session declined successfully' });
     });
-  });
+  }
 });
 
-// 4.3) Reject Proxy Session
-app.put('/api/sessions/:id/reject', (req, res) => {
-  const { id } = req.params;
-  db.run(`UPDATE sessions SET approvalStatus = 'rejected' WHERE id = ?`, [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Session not found' });
-    
-    db.get('SELECT proxyFacultyId, courseCode, facultyId FROM sessions WHERE id = ?', [id], (err, row) => {
-      if (row && row.proxyFacultyId) {
-        db.get('SELECT name FROM users WHERE id = ?', [row.facultyId], (err, fac) => {
-           const facName = fac ? fac.name : row.facultyId;
-           const now = new Date().toISOString();
-           const title = 'Proxy Rejected';
-           const body = `${facName} rejected your proxy session for ${row.courseCode}.`;
-           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-             [uuidv4(), row.proxyFacultyId, title, body, 'Rejected', 'errorContainer', 'onErrorContainer', facName, 'cancel', now]);
-           sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_REJECTED' });
-        });
-      }
-    });
-    
-    res.json({ success: true, message: 'Session rejected successfully' });
-  });
-});
+// Removed /reject route completely as per user request
 
 // 5) Rotate QR Code
 app.post('/api/sessions/:id/rotate-qr', (req, res) => {
@@ -1093,14 +1081,28 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
            });
         }
         
-        // Notify the faculty who actually submitted the attendance
-        const submitterId = session.proxyFacultyId || session.facultyId;
-        const submitterTitle = 'Attendance Submitted';
-        const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
-        db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
-        sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
-        notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
+        // Notify the faculty who actually submitted the attendance, or ask Original Faculty for approval
+        if (session.proxyFacultyId && session.approvalStatus === 'pending' && session.facultyId !== session.proxyFacultyId) {
+           // Notify Original Faculty to approve it
+           db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
+               const proxyName = row ? row.name : session.proxyFacultyId;
+               const title = 'Proxy Approval Required';
+               const body = `${proxyName} has submitted attendance for your ${session.courseCode} class. Please review and approve.`;
+               db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 [uuidv4(), session.facultyId, title, body, 'Action Required', 'tertiaryContainer', 'onTertiaryContainer', proxyName, 'pending_actions', new Date().toISOString()]);
+               sendPushNotification(session.facultyId, title, body, { type: 'PROXY_APPROVAL_REQUIRED' });
+               notifyClients(session.facultyId, { type: 'PROXY_APPROVAL_REQUIRED', title, body });
+           });
+        } else {
+           // Regular submission notification to the submitter
+           const submitterId = session.proxyFacultyId || session.facultyId;
+           const submitterTitle = 'Attendance Submitted';
+           const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
+           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
+           sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
+           notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
+        }
 
         res.json({ success: true, message: 'Attendance finalized successfully.' });
       });

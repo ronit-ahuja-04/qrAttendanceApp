@@ -272,6 +272,9 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
         ),
         floatingActionButton: Builder(
           builder: (ctx) {
+            final isNayan = AmsGlobals.loggedInUser?.name.toLowerCase().contains('nayan') == true;
+            if (isNayan) return const SizedBox.shrink();
+            
             return FloatingActionButton.extended(
               onPressed: () {
                 final tabIndex = DefaultTabController.of(ctx).index;
@@ -324,7 +327,8 @@ class _SlotCard extends StatelessWidget {
                   ),
                   Row(
                     children: [
-                      IconButton(
+                      if (!(AmsGlobals.loggedInUser?.name.toLowerCase().contains('nayan') == true)) ...[
+                        IconButton(
                         icon: Icon(Icons.edit_outlined, color: context.colors.vesitPrimary),
                         onPressed: onEdit,
                       ),
@@ -332,6 +336,7 @@ class _SlotCard extends StatelessWidget {
                         icon: Icon(Icons.delete_outline, color: context.colors.vesitRed),
                         onPressed: onDelete,
                       ),
+                      ]
                     ],
                   ),
                 ],

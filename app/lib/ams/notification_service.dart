@@ -211,13 +211,14 @@ class NotificationService {
     final overlay = _navigatorKey?.currentState?.overlay;
     final state = WidgetsBinding.instance.lifecycleState;
     
-    // If we have an overlay and app is in foreground, show a beautiful custom bubble!
-    if (overlay != null && state == AppLifecycleState.resumed) {
-      _showInAppBubble(overlay, title: title, body: body, payload: payload);
-    } 
-    
-    if (!kIsWeb && state != AppLifecycleState.resumed) {
-      // Fallback to OS notification if app is in background or context is missing
+    if (kIsWeb) {
+      // Web: Strictly use custom in-app bubble (toast)
+      if (overlay != null) {
+        _showInAppBubble(overlay, title: title, body: body, payload: payload);
+      }
+    } else {
+      // Mobile: Strictly OS based, no in-app toasts for notifications.
+      // This will force the OS head-up notification even if the app is in the foreground.
       const AndroidNotificationDetails androidPlatformChannelSpecifics =
           AndroidNotificationDetails(
               'ams_channel_id', 'AMS Notifications',
