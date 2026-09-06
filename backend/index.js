@@ -370,7 +370,7 @@ app.get('/profile-images/:id', (req, res) => {
 app.post('/login', loginLimiter, (req, res) => {
   const { email, password, deviceId } = req.body;
   console.log('Login attempt:', email, password);
-  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
+  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE LOWER(email) = LOWER(?) AND password = ?`, [email, password], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
 
