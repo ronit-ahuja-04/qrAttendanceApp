@@ -140,31 +140,10 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
 
   Future<void> _checkLoginState() async {
     try {
+      // User explicitly requested no auto-login caching on app or web
+      // We still clear any residual cache just in case.
       final prefs = await SharedPreferences.getInstance();
-      final sessionJson = prefs.getString('ams_user_session');
-      if (sessionJson != null && sessionJson.isNotEmpty) {
-        final Map<String, dynamic> userMap = jsonDecode(sessionJson);
-        final user = User.fromJson(userMap);
-        AmsGlobals.loggedInUser = user;
-        
-        // Ensure FCM token is synced since BootLoader bypassed the login screen
-        final token = NotificationService().currentToken;
-        if (token != null) {
-          ApiSessionService().updateFcmToken(user.id, token).catchError((_) {});
-        }
-
-        if (!mounted) return;
-        if (user.role == 'faculty') {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const FacultyMainLayout()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const StudentMainLayout()),
-          );
-        }
-        return;
-      }
+      await prefs.remove('ams_user_session');
     } catch (e) {
       print('Bootloader error: $e');
     }

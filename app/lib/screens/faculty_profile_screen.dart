@@ -22,7 +22,9 @@ class FacultyProfileScreen extends StatefulWidget {
 }
 
 class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
-  void _logout(BuildContext context) {
+  Future<void> _logout(BuildContext context) async {
+    await AmsGlobals.sessionService.logout();
+    if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
