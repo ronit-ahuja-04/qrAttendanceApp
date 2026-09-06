@@ -38,13 +38,15 @@ async function main() {
 
     for (const user of users) {
       // 1. Generate password based on role
-      const firstName = user.name.split(' ')[0]; // Gets the first name
+      const fullNameNoSpaces = user.name.replace(/\s+/g, ''); // Removes all spaces from full name
+      const firstNameForEmail = user.name.split(' ')[0]; // Still use first name for the "Hi X" greeting
+      
       let newPassword = '';
       
       if (user.role === 'student') {
-        newPassword = `${firstName}@${user.rollNo}`;
+        newPassword = `${fullNameNoSpaces}@${user.rollNo}`;
       } else if (user.role === 'faculty' || user.role === 'admin') {
-        newPassword = `Fac${firstName}@vesit`;
+        newPassword = `${fullNameNoSpaces}@vesit`;
       } else {
         continue;
       }
@@ -65,7 +67,7 @@ async function main() {
             <p style="color:#fff;margin:4px 0 0;font-size:13px">VESIT Attendance Management System</p>
           </div>
           <div style="padding:28px">
-            <p style="font-size:15px;color:#333">Hi ${firstName},</p>
+            <p style="font-size:15px;color:#333">Hi ${firstNameForEmail},</p>
             <p style="font-size:15px;color:#333">Your account for the new Attendance Management System has been created.</p>
             <p style="font-size:15px;color:#333">You can log in using your college email and the default password below:</p>
             <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
