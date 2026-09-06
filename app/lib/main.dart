@@ -142,13 +142,19 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
 
   Future<void> _checkLoginState() async {
     try {
-      // Clear residual SharedPreferences cache (old auto-login method)
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('ams_user_session');
+      
+      bool useSharedPrefs = !kIsWeb;
+      if (kIsWeb) {
+        useSharedPrefs = html.window.matchMedia('(display-mode: standalone)').matches;
+      }
 
       String? sessionJson;
-      if (kIsWeb) {
-        // Use sessionStorage to isolate logins per-tab on Web
+      if (useSharedPrefs) {
+        sessionJson = prefs.getString('ams_user_session');
+      } else {
+        // Ensure SharedPreferences is cleared for standard web tabs to avoid cache leaks
+        if (kIsWeb) await prefs.remove('ams_user_session');
         sessionJson = html.window.sessionStorage['ams_user_session'];
       }
       

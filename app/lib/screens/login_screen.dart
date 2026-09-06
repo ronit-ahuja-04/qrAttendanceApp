@@ -132,12 +132,19 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       AmsGlobals.loggedInUser = user;
-      
       final prefs = await SharedPreferences.getInstance();
+      
+      bool useSharedPrefs = !kIsWeb;
       if (kIsWeb) {
-        html.window.sessionStorage['ams_user_session'] = jsonEncode(user.toJson());
+        useSharedPrefs = html.window.matchMedia('(display-mode: standalone)').matches;
       }
       
+      final sessionData = jsonEncode(user.toJson());
+      if (useSharedPrefs) {
+        prefs.setString('ams_user_session', sessionData);
+      } else {
+        html.window.sessionStorage['ams_user_session'] = sessionData;
+      }
       final pushEnabled = prefs.getBool('notif_master') ?? true;
       
       if (pushEnabled) {
