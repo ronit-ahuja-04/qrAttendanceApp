@@ -445,9 +445,8 @@ app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (r
       const bucket = admin.storage().bucket();
       const ext = path.extname(req.file.originalname);
       const filename = `profiles/${uuidv4()}${ext}`;
-      const file = bucket.file(filename);
-      
-      await file.save(req.file.buffer, {
+      await bucket.upload(req.file.path, {
+        destination: filename,
         metadata: { contentType: req.file.mimetype },
       });
       
