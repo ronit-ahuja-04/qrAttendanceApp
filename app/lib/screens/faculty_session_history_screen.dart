@@ -108,6 +108,9 @@ class _HistoryCard extends StatelessWidget {
     final dateFormat = DateFormat('MMM d, yyyy');
     final timeFormat = DateFormat('h:mm a');
     
+    final isProxiedByMeAndWonCredit = session.proxyFacultyId != null && session.proxyFacultyId == session.facultyId;
+    final displayCourseCode = isProxiedByMeAndWonCredit ? '${session.courseCode} (Proxied)' : session.courseCode;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -131,7 +134,7 @@ class _HistoryCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        session.courseCode,
+                        displayCourseCode,
                         style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitTextHeading, fontSize: 16),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

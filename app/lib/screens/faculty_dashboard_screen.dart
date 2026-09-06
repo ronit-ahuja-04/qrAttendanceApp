@@ -1172,11 +1172,6 @@ class _UpcomingSessionsList extends StatelessWidget {
     final now = DateTime.now();
     final currentDayStr = DateFormat('EEE').format(now); // e.g. "Thu"
 
-    final todaySessions = allSessions.where((s) {
-      final sDate = s.createdAt;
-      return sDate.year == now.year && sDate.month == now.month && sDate.day == now.day;
-    }).toList();
-
     final todaySlots = AmsGlobals.timetableSlots.where((s) {
       if (s['day'] != currentDayStr) return false;
 
@@ -1194,7 +1189,7 @@ class _UpcomingSessionsList extends StatelessWidget {
       bool hasSession = false;
       SessionStatus? existingStatus;
       dynamic sessionData;
-      for (var ts in todaySessions) {
+      for (var ts in allSessions) {
         final slotId = s['id'] ?? s['_id'];
         if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
           if (ts.slotId == slotId) {
@@ -1370,7 +1365,7 @@ class _RecentSessionsList extends StatelessWidget {
       );
     }
 
-    final recentSessions = sessions.where((s) => s.status == SessionStatus.closed || s.status == SessionStatus.active).toList();
+    final recentSessions = sessions.where((s) => s.status == SessionStatus.closed || s.status == SessionStatus.active || s.status == SessionStatus.completed).toList();
     recentSessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final topSessions = recentSessions.take(5).toList();
 
@@ -1398,6 +1393,9 @@ class _RecentSessionsList extends StatelessWidget {
 
         final isProxiedBySomeoneElse = session.proxyFacultyId != null && session.proxyFacultyId != session.facultyId;
         final isPendingProxy = isProxiedBySomeoneElse && session.approvalStatus == 'pending';
+        
+        final isProxiedByMeAndWonCredit = session.proxyFacultyId != null && session.proxyFacultyId == session.facultyId;
+        final displayCourseCode = isProxiedByMeAndWonCredit ? '${session.courseCode} (Proxied)' : session.courseCode;
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -1405,7 +1403,7 @@ class _RecentSessionsList extends StatelessWidget {
             date: dateStr,
             time: timeStr,
             venue: session.status == SessionStatus.active ? 'Running' : 'Completed',
-            course: session.courseCode,
+            course: displayCourseCode,
             students: '${session.presentCount}/${session.enrolledStudentIds.length}',
             status: session.status == SessionStatus.active ? 'Live' : 'Closed',
             isUpcoming: session.status == SessionStatus.active,

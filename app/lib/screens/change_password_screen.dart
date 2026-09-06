@@ -32,7 +32,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     super.dispose();
   }
 
-    Future<void> _submit() async {
+  Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_newController.text != _confirmController.text) {
       VesitToast.show(context: context, title: "New password and confirmation don't match", type: ToastType.info);
@@ -42,7 +42,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     setState(() => _submitting = true);
     
     try {
-      await Future.delayed(const Duration(milliseconds: 500)); // mock network call
+      final user = AmsGlobals.loggedInUser;
+      if (user == null) throw Exception("User not logged in");
+      
+      await AmsGlobals.sessionService.changePassword(
+         user.id,
+         _currentController.text,
+         _newController.text,
+      );
+
       if (!mounted) return;
       setState(() {
         _submitting = false;

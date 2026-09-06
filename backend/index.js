@@ -185,9 +185,49 @@ app.post('/update-notification-prefs', (req, res) => {
 // Setup EOD Cron Job for Proxy Approvals (11:59 PM)
 cron.schedule('59 23 * * *', () => {
   console.log('Running EOD Auto-Approval for pending proxy sessions...');
-  db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE approvalStatus = 'pending'`, function(err) {
-    if (err) console.error('EOD Auto-Approval failed:', err.message);
-    else console.log(`Auto-approved ${this.changes} sessions.`);
+  db.all(`SELECT id, courseCode, facultyId, proxyFacultyId FROM sessions WHERE approvalStatus = 'pending'`, [], (err, sessions) => {
+    if (err) return console.error('EOD query error:', err.message);
+    if (!sessions || sessions.length === 0) return console.log('No pending proxy sessions found for EOD auto-approval.');
+    
+    sessions.forEach(session => {
+      db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE id = ?`, [session.id], function(updateErr) {
+        if (updateErr) return console.error('EOD update error:', updateErr.message);
+        
+        const now = new Date().toISOString();
+        const facTitle = 'Proxy Auto-Approved (Timeout)';
+        const facBody = `The pending proxy session for ${session.courseCode} was auto-approved because it was not resolved by midnight.`;
+        
+        // Notify original faculty
+        db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [uuidv4(), session.facultyId, facTitle, facBody, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'schedule', now]);
+        sendPushNotification(session.facultyId, facTitle, facBody, { type: 'PROXY_AUTO_APPROVED' });
+
+        // Notify proxy faculty
+        if (session.proxyFacultyId) {
+          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), session.proxyFacultyId, facTitle, facBody, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'schedule', now]);
+          sendPushNotification(session.proxyFacultyId, facTitle, facBody, { type: 'PROXY_AUTO_APPROVED' });
+        }
+
+        // Notify enrolled students
+        db.get('SELECT name FROM users WHERE id = ?', [session.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : session.facultyId;
+          db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [session.id, 'present'], (err, students) => {
+            if (students && students.length > 0) {
+              const sTitle = 'Attendance Verified (Auto)';
+              const sBody = `Attendance marked for lecture ${session.courseCode} of faculty ${facName}.`;
+              const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+              students.forEach(s => {
+                notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
+                sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
+              });
+              notifStmt.finalize();
+            }
+          });
+        });
+      });
+    });
+    console.log(`EOD Auto-approval initiated for ${sessions.length} sessions.`);
   });
 }, {
   scheduled: true,
@@ -777,6 +817,20 @@ app.put('/api/sessions/:id/approve', (req, res) => {
            db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
              [uuidv4(), row.proxyFacultyId, title, body, 'Approved', 'primaryContainer', 'onPrimaryContainer', facName, 'check_circle', now]);
            sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
+
+           // Notify students
+           db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [id, 'present'], (err, students) => {
+             if (students && students.length > 0) {
+               const sTitle = 'Attendance Verified';
+               const sBody = `Attendance marked for lecture ${row.courseCode} of faculty ${facName}.`;
+               const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+               students.forEach(s => {
+                 notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
+                 sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
+               });
+               notifStmt.finalize();
+             }
+           });
         });
       }
     });
@@ -794,38 +848,61 @@ app.put('/api/sessions/:id/decline', (req, res) => {
     
     // Check if it is a Lab or Lecture based on batchTarget
     const isLab = sessionRow.batchTarget && sessionRow.batchTarget.includes('Batch');
+    let baseDivision = sessionRow.batchTarget || '';
+    if (baseDivision.includes(' - ')) {
+      baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
+    }
     
     if (isLab) {
       // Labs always default credit to Original Faculty on decline
-      finalizeDecline(id, sessionRow, sessionRow.facultyId);
+      finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
     } else {
-      // Lectures: Check if proxy faculty teaches this subject to this class division
-      db.get(`SELECT id FROM timetable_slots WHERE facultyId = ? AND subject = ? AND batchTarget = ? LIMIT 1`,
-        [sessionRow.proxyFacultyId, sessionRow.courseCode, sessionRow.batchTarget], 
+      // Lectures: Check what subject proxy faculty teaches to this class division
+      db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`,
+        [sessionRow.proxyFacultyId, `%${baseDivision}%`], 
         (err, row) => {
           if (row) {
-            // Proxy teaches this subject to this class, so credit goes to Proxy
-            finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId);
+            // Proxy teaches this subject to this class, so credit goes to Proxy with THEIR subject
+            finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, row.subject, sessionRow.courseCode);
           } else {
             // Proxy does not teach it (e.g., Assistant), credit defaults to Original Faculty
-            finalizeDecline(id, sessionRow, sessionRow.facultyId);
+            finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
           }
       });
     }
   });
 
-  function finalizeDecline(sessionId, sessionRow, finalCreditId) {
-    db.run(`UPDATE sessions SET facultyId = ?, approvalStatus = 'approved' WHERE id = ?`, [finalCreditId, sessionId], function (err) {
+  function finalizeDecline(sessionId, sessionRow, finalCreditId, finalCourseCode, originalCourseCode = null) {
+    db.run(`UPDATE sessions SET facultyId = ?, courseCode = ?, approvalStatus = 'approved' WHERE id = ?`, [finalCreditId, finalCourseCode, sessionId], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       
       const now = new Date().toISOString();
-      db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, fac) => {
-         const facName = fac ? fac.name : sessionRow.facultyId;
+      db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, facA) => {
+         const facNameA = facA ? facA.name : sessionRow.facultyId;
          const title = 'Proxy Declined';
-         const body = `${facName} declined the proxy for ${sessionRow.courseCode}.`;
+         const body = `${facNameA} declined the proxy for ${sessionRow.courseCode}.`;
          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-           [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Declined', 'tertiaryContainer', 'onTertiaryContainer', facName, 'undo', now]);
+           [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Declined', 'tertiaryContainer', 'onTertiaryContainer', facNameA, 'undo', now]);
          sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_DECLINED' });
+
+         // Notify students if credit went to Proxy
+         if (finalCreditId === sessionRow.proxyFacultyId && originalCourseCode) {
+           db.get('SELECT name FROM users WHERE id = ?', [sessionRow.proxyFacultyId], (err, facB) => {
+             const facNameB = facB ? facB.name : sessionRow.proxyFacultyId;
+             db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [sessionId, 'present'], (err, students) => {
+               if (students && students.length > 0) {
+                 const sTitle = 'Proxy Verified';
+                 const sBody = `Proxy lecture attendance marked. Proxied by faculty ${facNameB} for their subject ${finalCourseCode} in return for ${facNameA}'s lecture ${originalCourseCode}.`;
+                 const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                 students.forEach(s => {
+                   notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT (Proxy)', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
+                   sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
+                 });
+                 notifStmt.finalize();
+               }
+             });
+           });
+         }
       });
       
       res.json({ success: true, message: 'Session declined successfully' });
@@ -1043,67 +1120,75 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
 
         db.run(`UPDATE sessions SET status = 'completed' WHERE id = ?`, [sessionId]);
 
-        const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        db.get('SELECT name FROM users WHERE id = ?', [session.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : session.facultyId;
+          const isLab = session.batchTarget && session.batchTarget.includes('Batch');
+          const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
-        // Notify all students in this session that their attendance was updated
-        updates.forEach(u => {
-          const statusText = u.status.toUpperCase();
-          const isPending = session.approvalStatus === 'pending';
-          
-          const title = isPending ? 'Attendance On Hold' : 'Attendance Verified';
-          const body = isPending 
-            ? `Your attendance for ${session.courseCode} is on hold pending original faculty approval.`
-            : `Marked as ${statusText} for ${session.courseCode} at ${timeString}`;
+          // Notify all students in this session that their attendance was updated
+          updates.forEach(u => {
+            const statusText = u.status.toUpperCase();
+            const isPending = session.approvalStatus === 'pending';
             
-          const tagColor = isPending ? 'tertiaryContainer' : (u.status === 'present' ? 'primaryContainer' : 'errorContainer');
-          const onTagColor = isPending ? 'onTertiaryContainer' : (u.status === 'present' ? 'onPrimaryContainer' : 'onErrorContainer');
+            const title = isPending ? 'Attendance On Hold' : 'Attendance Verified';
+            let body = isPending 
+              ? `Your attendance for ${session.courseCode} is on hold pending original faculty approval.`
+              : `Marked as ${statusText} for ${session.courseCode} at ${timeString}`;
+              
+            if (isLab && session.proxyFacultyId && !isPending) {
+               body = `Attendance for Lab recorded for student. Status of attendance record for the specified lab batch faculty ${facName}`;
+            }
+              
+            const tagColor = isPending ? 'tertiaryContainer' : (u.status === 'present' ? 'primaryContainer' : 'errorContainer');
+            const onTagColor = isPending ? 'onTertiaryContainer' : (u.status === 'present' ? 'onPrimaryContainer' : 'onErrorContainer');
+            
+            const icon = isPending ? 'pending_actions' : 'check_circle';
+            
+            notifStmt.run(uuidv4(), u.studentId, title, body, isPending ? 'On Hold' : statusText, tagColor, onTagColor, 'System', icon, new Date().toISOString());
+            sendPushNotification(u.studentId, title, body, { type: 'ATTENDANCE_MARKED', status: u.status, isPending: isPending.toString() });
+            notifyClients(u.studentId, { type: 'ATTENDANCE_UPDATED', sessionId, title, body });
+          });
+          notifStmt.finalize();
+
+          // If it was an auto-approved proxy, notify the original faculty NOW (upon submit)
+          if (session.proxyFacultyId && session.approvalStatus === 'approved' && session.facultyId !== session.proxyFacultyId) {
+             const now = new Date().toISOString();
+             const isSeminar = session.courseCode.toLowerCase().includes('seminar') || (session.batchTarget && session.batchTarget.includes(','));
+             db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
+                 const proxyName = row ? row.name : session.proxyFacultyId;
+                 const title = 'Proxy Session Completed (Auto-Approved)';
+                 const body = `${proxyName} has submitted attendance for the proxy session of your ${session.courseCode} at ${session.batchTarget} and it was auto-approved${isSeminar ? ' (Seminar)' : ''}.`;
+                 db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   [uuidv4(), session.facultyId, title, body, 'Auto-Approved', 'successContainer', 'onSuccessContainer', proxyName, 'check_circle', now]);
+                 sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
+             });
+          }
           
-          const icon = isPending ? 'pending_actions' : 'check_circle';
-          
-          notifStmt.run(uuidv4(), u.studentId, title, body, isPending ? 'On Hold' : statusText, tagColor, onTagColor, 'System', icon, new Date().toISOString());
-          sendPushNotification(u.studentId, title, body, { type: 'ATTENDANCE_MARKED', status: u.status, isPending: isPending.toString() });
-          notifyClients(u.studentId, { type: 'ATTENDANCE_UPDATED', sessionId, title, body });
+          // Notify the faculty who actually submitted the attendance, or ask Original Faculty for approval
+          if (session.proxyFacultyId && session.approvalStatus === 'pending' && session.facultyId !== session.proxyFacultyId) {
+             // Notify Original Faculty to approve it
+             db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
+                 const proxyName = row ? row.name : session.proxyFacultyId;
+                 const title = 'Proxy Approval Required';
+                 const body = `${proxyName} has submitted attendance for your ${session.courseCode} class. Please review and approve.`;
+                 db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   [uuidv4(), session.facultyId, title, body, 'Action Required', 'tertiaryContainer', 'onTertiaryContainer', proxyName, 'pending_actions', new Date().toISOString()]);
+                 sendPushNotification(session.facultyId, title, body, { type: 'PROXY_APPROVAL_REQUIRED' });
+                 notifyClients(session.facultyId, { type: 'PROXY_APPROVAL_REQUIRED', title, body });
+             });
+          } else {
+             // Regular submission notification to the submitter
+             const submitterId = session.proxyFacultyId || session.facultyId;
+             const submitterTitle = 'Attendance Submitted';
+             const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
+             db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+               [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
+             sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
+             notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
+          }
+
+          res.json({ success: true, message: 'Attendance finalized successfully.' });
         });
-        notifStmt.finalize();
-
-        // If it was an auto-approved proxy, notify the original faculty NOW (upon submit)
-        if (session.proxyFacultyId && session.approvalStatus === 'approved' && session.facultyId !== session.proxyFacultyId) {
-           const now = new Date().toISOString();
-           const isSeminar = session.courseCode.toLowerCase().includes('seminar') || (session.batchTarget && session.batchTarget.includes(','));
-           db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
-               const proxyName = row ? row.name : session.proxyFacultyId;
-               const title = 'Proxy Session Completed (Auto-Approved)';
-               const body = `${proxyName} has submitted attendance for the proxy session of your ${session.courseCode} at ${session.batchTarget} and it was auto-approved${isSeminar ? ' (Seminar)' : ''}.`;
-               db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                 [uuidv4(), session.facultyId, title, body, 'Auto-Approved', 'successContainer', 'onSuccessContainer', proxyName, 'check_circle', now]);
-               sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
-           });
-        }
-        
-        // Notify the faculty who actually submitted the attendance, or ask Original Faculty for approval
-        if (session.proxyFacultyId && session.approvalStatus === 'pending' && session.facultyId !== session.proxyFacultyId) {
-           // Notify Original Faculty to approve it
-           db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
-               const proxyName = row ? row.name : session.proxyFacultyId;
-               const title = 'Proxy Approval Required';
-               const body = `${proxyName} has submitted attendance for your ${session.courseCode} class. Please review and approve.`;
-               db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                 [uuidv4(), session.facultyId, title, body, 'Action Required', 'tertiaryContainer', 'onTertiaryContainer', proxyName, 'pending_actions', new Date().toISOString()]);
-               sendPushNotification(session.facultyId, title, body, { type: 'PROXY_APPROVAL_REQUIRED' });
-               notifyClients(session.facultyId, { type: 'PROXY_APPROVAL_REQUIRED', title, body });
-           });
-        } else {
-           // Regular submission notification to the submitter
-           const submitterId = session.proxyFacultyId || session.facultyId;
-           const submitterTitle = 'Attendance Submitted';
-           const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
-           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-             [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
-           sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
-           notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
-        }
-
-        res.json({ success: true, message: 'Attendance finalized successfully.' });
       });
     });
   });
@@ -1568,7 +1653,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
 
   // 1. Fetch closed & approved sessions where student is enrolled
   const query = `
-    SELECT s.id as sessionId, s.courseCode, s.createdAt, s.facultyId, 
+    SELECT s.id as sessionId, s.courseCode, s.createdAt, s.facultyId, s.proxyFacultyId,
            u.name as facultyName
     FROM sessions s
     LEFT JOIN users u ON s.facultyId = u.id
@@ -1634,7 +1719,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
             
             return {
               sessionId: s.sessionId,
-              subject: s.courseCode,
+              subject: (s.proxyFacultyId !== null && s.facultyId === s.proxyFacultyId) ? `${s.courseCode} (Proxy)` : s.courseCode,
               time: timeStr,
               location: venue,
               professor: s.facultyName || 'Unknown Faculty',
