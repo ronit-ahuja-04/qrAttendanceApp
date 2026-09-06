@@ -24,11 +24,16 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   late List<String> _batchTargets;
   late String _batchTarget;
 
+  String _cleanSubject(String subject) {
+    return subject.replaceAll(RegExp(r'\s*-\s*(Lecture|Normal|Practical|Lab|Tutorial)$', caseSensitive: false), '').trim();
+  }
+
   void _initSubjects() {
-    final timetableSubjects = AmsGlobals.timetableSlots.map((s) => s['subject'] as String).toList();
-    final customSubjects = AmsGlobals.facultySessions.map((s) => s.courseCode).toList();
+    final timetableSubjects = AmsGlobals.timetableSlots.map((s) => _cleanSubject(s['subject'] as String)).toList();
+    final customSubjects = AmsGlobals.facultySessions.map((s) => _cleanSubject(s.courseCode)).toList();
     
     _subjects = [...timetableSubjects, ...customSubjects].toSet().toList();
+    _subjects.sort();
     if (_subjects.isEmpty) _subjects = ['No Subjects'];
     _subject = _subjects.first;
   }
@@ -42,16 +47,17 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
 
   void _updateBatchTargets() {
     final timetableBatches = AmsGlobals.timetableSlots
-        .where((s) => s['subject'] == _subject)
+        .where((s) => _cleanSubject(s['subject']) == _subject)
         .map((s) => (s['batchTarget'] as String?) ?? 'All')
         .toList();
         
     final customBatches = AmsGlobals.facultySessions
-        .where((s) => s.courseCode == _subject)
+        .where((s) => _cleanSubject(s.courseCode) == _subject)
         .map((s) => s.batchTarget ?? 'All')
         .toList();
 
     _batchTargets = [...timetableBatches, ...customBatches].toSet().toList();
+    _batchTargets.sort();
     if (_batchTargets.isEmpty) _batchTargets = ['All'];
     _batchTarget = _batchTargets.first;
   }
@@ -105,11 +111,26 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
                           ),
                           const SizedBox(height: 16),
                           ConfigCard(
-                            label: 'Batch / Target',
+                            label: 'Batch',
                             child: DebossedDropdown<String>(
                               value: _batchTarget,
                               items: _batchTargets,
-                              itemLabel: (v) => v,
+                              itemLabel: (v) {
+                                // Format from "D15A - Batch A" to "D15-A batch-A"
+                                if (v == 'All') return 'All';
+                                return v
+                                  .replaceAllMapped(RegExp(r'^([A-Z0-9]+)\s*-\s*Batch\s*([A-Z0-9]+)$', caseSensitive: false), (m) {
+                                    final d = m[1]!;
+                                    // Insert hyphen in division e.g. D15A -> D15-A
+                                    final div = d.length > 3 ? '${d.substring(0, d.length - 1)}-${d.substring(d.length - 1)}' : d;
+                                    return '$div batch-${m[2]}';
+                                  })
+                                  .replaceAllMapped(RegExp(r'^([A-Z0-9]+)\s*-\s*All$', caseSensitive: false), (m) {
+                                    final d = m[1]!;
+                                    final div = d.length > 3 ? '${d.substring(0, d.length - 1)}-${d.substring(d.length - 1)}' : d;
+                                    return '$div All';
+                                  });
+                              },
                               onChanged: (v) => setState(() => _batchTarget = v!),
                             ),
                           ),
