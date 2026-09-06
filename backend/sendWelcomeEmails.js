@@ -73,7 +73,7 @@ async function main() {
             </div>
             <p style="font-size:13px;color:#888">Please log in and go to your profile to change your password as soon as possible.</p>
             <div style="text-align:center;margin-top:20px">
-              <a href="https://qr-attendance-app.vercel.app" style="background:#002147;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">Go to App</a>
+              <a href="https://vesit-ams.vercel.app" style="background:#002147;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">Go to App</a>
             </div>
           </div>
         </div>
