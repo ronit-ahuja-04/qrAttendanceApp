@@ -476,7 +476,10 @@ class _AddSlotModalState extends State<_AddSlotModal> {
 
   void _updateBatchesForType() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
-    final validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
+    var validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
+    if (_type.toLowerCase() == 'lecture') {
+      validScopes = validScopes.where((s) => !(s['batchTarget']?.toString().toLowerCase().contains('batch') ?? false)).toList();
+    }
     
     if (validScopes.isNotEmpty) {
       _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? 'Unknown Batch').toSet().toList()..sort();
@@ -533,6 +536,19 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Mismatch: Target is Soft Computing but Subject is not.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(top: 50, left: 20, right: 20),
+          dismissDirection: DismissDirection.up,
+        ),
+      );
+      return;
+    }
+    
+    if (_type.toLowerCase() == 'lecture' && _batch.toLowerCase().contains('batch')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mismatch: Lectures are for the entire division/elective group, not a specific Batch.'),
           duration: Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.only(top: 50, left: 20, right: 20),
