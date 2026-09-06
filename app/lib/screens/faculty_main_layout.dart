@@ -5,6 +5,7 @@ import 'faculty_dashboard_screen.dart';
 import 'faculty_readonly_timetable_screen.dart';
 import 'faculty_session_history_screen.dart';
 import 'faculty_profile_screen.dart';
+import '../ams/globals.dart';
 
 class FacultyMainLayout extends StatefulWidget {
   const FacultyMainLayout({super.key});
@@ -91,10 +92,10 @@ class _FacultyMainLayoutState extends State<FacultyMainLayout> {
                   currentIndex: _currentIndex,
                   onTap: _onTabTapped,
                   items: [
-                    const GlassNavItem(icon: Icons.home_rounded, label: 'Home'),
-                    if (!isAssistant) const GlassNavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
-                    const GlassNavItem(icon: Icons.history_rounded, label: 'History'),
-                    const GlassNavItem(icon: Icons.person_rounded, label: 'Profile'),
+                    GlassNavItem(icon: Icons.home_rounded, label: 'Home'),
+                    if (!isAssistant) GlassNavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
+                    GlassNavItem(icon: Icons.history_rounded, label: 'History'),
+                    GlassNavItem(icon: Icons.person_rounded, label: 'Profile'),
                   ],
                 ),
               ),
