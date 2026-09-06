@@ -72,7 +72,7 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                     style: context.textStyles.vesitLabelBold.copyWith(letterSpacing: 1.5, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 12),
-                  if (user?.role != 'student')
+                  if (user?.role != 'student' && (user?.scopes?.isNotEmpty ?? false))
                     _SettingsButton(
                       icon: Icons.calendar_month_outlined,
                       label: 'Manage Timetable',
@@ -83,7 +83,7 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                         _refresh();
                       },
                     ),
-                  if (user?.role != 'student') const SizedBox(height: 12),
+                  if (user?.role != 'student' && (user?.scopes?.isNotEmpty ?? false)) const SizedBox(height: 12),
                   _SettingsButton(
                     icon: Icons.notifications_none_outlined,
                     label: 'Push Notifications',

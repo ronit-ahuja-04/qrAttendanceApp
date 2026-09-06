@@ -151,6 +151,8 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final user = AmsGlobals.loggedInUser;
+            final isAssistant = user?.scopes?.isEmpty ?? false;
             final bool isWeb = constraints.maxWidth > 800;
 
             if (isWeb) {
@@ -232,16 +234,18 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                           ),
                           const SizedBox(height: 32),
                           _buildPendingApprovalsBanner(),
-                          const SizedBox(height: 16),
-                          Text('Upcoming Sessions',
-                              style: context.textStyles.vesitHeadlineSm),
-                          const SizedBox(height: 16),
-                          _UpcomingSessionsList(
-                            isLoading: _isLoading,
-                            allSessions: _allSessions,
-                            onRefresh: _loadTimetable,
-                          ),
-                          const SizedBox(height: 32),
+                          if (!isAssistant) ...[
+                            const SizedBox(height: 16),
+                            Text('Upcoming Sessions',
+                                style: context.textStyles.vesitHeadlineSm),
+                            const SizedBox(height: 16),
+                            _UpcomingSessionsList(
+                              isLoading: _isLoading,
+                              allSessions: _allSessions,
+                              onRefresh: _loadTimetable,
+                            ),
+                            const SizedBox(height: 32),
+                          ],
                           Text('Recent Sessions',
                               style: context.textStyles.vesitHeadlineSm),
                           const SizedBox(height: 16),
@@ -312,15 +316,17 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                         const SizedBox(height: 24),
                         _buildPendingApprovalsBanner(),
                         const SizedBox(height: 16),
-                        Text('Upcoming Sessions',
-                            style: context.textStyles.vesitHeadlineSm),
-                        const SizedBox(height: 16),
-                        _UpcomingSessionsList(
-                          isLoading: _isLoading,
-                          allSessions: _allSessions,
-                          onRefresh: _loadTimetable,
-                        ),
-                        const SizedBox(height: 32),
+                        if (!isAssistant) ...[
+                          Text('Upcoming Sessions',
+                              style: context.textStyles.vesitHeadlineSm),
+                          const SizedBox(height: 16),
+                          _UpcomingSessionsList(
+                            isLoading: _isLoading,
+                            allSessions: _allSessions,
+                            onRefresh: _loadTimetable,
+                          ),
+                          const SizedBox(height: 32),
+                        ],
                         Text('Recent Sessions',
                             style: context.textStyles.vesitHeadlineSm),
                         const SizedBox(height: 16),
