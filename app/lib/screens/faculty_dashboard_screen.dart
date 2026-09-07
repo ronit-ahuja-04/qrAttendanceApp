@@ -1448,7 +1448,7 @@ class _RecentSessionsList extends StatelessWidget {
             onReject: isPendingProxy
                 ? () async {
                     await AmsGlobals.runWithLoading(context, () async {
-                      await AmsGlobals.sessionService.rejectProxySession(session.id);
+                      await AmsGlobals.sessionService.declineProxySession(session.id);
                       onRefresh();
                     });
                   }
