@@ -102,12 +102,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         setState(() {
           _items = raw.map<_Notif>((json) {
             final tag = json['tag']?.toString() ?? 'Notification';
-            final isAttendance = tag.toLowerCase().contains('attendance');
+            final tagLower = tag.toLowerCase();
+            String tagColor;
+            String onTagColor;
+            if (tagLower.contains('present')) {
+              tagColor = 'green';
+              onTagColor = 'onGreen';
+            } else if (tagLower.contains('absent')) {
+              tagColor = 'red';
+              onTagColor = 'onRed';
+            } else if (tagLower.contains('hold')) {
+              tagColor = 'yellow';
+              onTagColor = 'onYellow';
+            } else if (tagLower.contains('reminder')) {
+              tagColor = 'black';
+              onTagColor = 'onBlack';
+            } else if (tagLower.contains('schedule') || tagLower.contains('change')) {
+              tagColor = 'blue';
+              onTagColor = 'onBlue';
+            } else {
+              tagColor = json['tagColor'] ?? 'primaryContainer';
+              onTagColor = json['onTagColor'] ?? 'onPrimaryContainer';
+            }
             return _Notif(
               id: json['id'],
               tag: tag,
-              tagColorName: isAttendance ? 'vesitGreen' : (json['tagColor'] ?? 'primaryContainer'),
-              onTagColorName: isAttendance ? 'onVesitGreen' : (json['onTagColor'] ?? 'onPrimaryContainer'),
+              tagColorName: tagColor,
+              onTagColorName: onTagColor,
               title: json['title'] ?? '',
               body: json['body'],
               byIcon: _getIcon(json['byIcon'] ?? 'person'),
@@ -219,6 +240,19 @@ class _Header extends StatelessWidget {
 
 
   Color _getSemanticColor(BuildContext context, String name, {bool isOn = false}) {
+    // Explicit semantic tag colors
+    if (name == 'green') return Colors.green.shade100;
+    if (name == 'onGreen') return Colors.green.shade800;
+    if (name == 'red') return Colors.red.shade100;
+    if (name == 'onRed') return Colors.red.shade800;
+    if (name == 'yellow') return Colors.amber.shade100;
+    if (name == 'onYellow') return Colors.amber.shade900;
+    if (name == 'black') return Colors.grey.shade800;
+    if (name == 'onBlack') return Colors.white;
+    if (name == 'blue') return Colors.blue.shade100;
+    if (name == 'onBlue') return Colors.blue.shade900;
+
+    // Legacy / fallback
     if (name == 'vesitGreen') return context.colors.vesitGreen.withValues(alpha: 0.15);
     if (name == 'onVesitGreen') return context.colors.vesitGreen;
 
