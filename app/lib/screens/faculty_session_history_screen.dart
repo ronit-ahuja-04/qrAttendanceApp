@@ -152,7 +152,16 @@ class _HistoryCard extends StatelessWidget {
                     const SizedBox(width: 16),
                     Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
                     const SizedBox(width: 6),
-                    Text(timeFormat.format(session.createdAt), style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600)),
+                    Builder(
+                      builder: (context) {
+                        if (session.firstLogTime != null && session.lastLogTime != null) {
+                          final start = timeFormat.format(session.firstLogTime!);
+                          final end = timeFormat.format(session.lastLogTime!);
+                          return Text(start == end ? start : '$start - $end', style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600));
+                        }
+                        return Text(timeFormat.format(session.createdAt), style: context.textStyles.vesitBodyMd.copyWith(color: Colors.grey.shade600));
+                      },
+                    ),
                   ],
                 ),
                 if (session.batchTarget != null && session.batchTarget!.isNotEmpty) ...[

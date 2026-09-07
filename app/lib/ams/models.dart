@@ -80,6 +80,8 @@ class AttendanceSession {
   final String? batchTarget;
   final String? slotId;
   final int presentCount;
+  final DateTime? firstLogTime;
+  final DateTime? lastLogTime;
 
   AttendanceSession({
     required this.id,
@@ -95,6 +97,8 @@ class AttendanceSession {
     this.batchTarget,
     this.slotId,
     this.presentCount = 0,
+    this.firstLogTime,
+    this.lastLogTime,
   });
 
   AttendanceSession copyWith({

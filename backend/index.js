@@ -977,7 +977,9 @@ app.get('/sessions/active/:courseCode', (req, res) => {
 app.get('/api/sessions/faculty/:facultyId', (req, res) => {
   const query = `
     SELECT sessions.*, users.name as proxyFacultyName,
-      (SELECT COUNT(*) FROM attendance_records WHERE sessionId = sessions.id AND status = 'present') as presentCount
+      (SELECT COUNT(*) FROM attendance_records WHERE sessionId = sessions.id AND status = 'present') as presentCount,
+      (SELECT MIN(markedAt) FROM attendance_records WHERE sessionId = sessions.id) as firstLogTime,
+      (SELECT MAX(markedAt) FROM attendance_records WHERE sessionId = sessions.id) as lastLogTime
     FROM sessions 
     LEFT JOIN users ON sessions.proxyFacultyId = users.id 
     WHERE facultyId = ? OR proxyFacultyId = ?
@@ -1700,13 +1702,17 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
     const sessionIds = sessions.map(s => s.sessionId);
     const placeholders = sessionIds.map(() => '?').join(',');
     
-    db.all(`SELECT sessionId, status FROM attendance_records WHERE studentId = ? AND sessionId IN (${placeholders})`, [studentId, ...sessionIds], (err, records) => {
+    db.all(`SELECT sessionId, status, markedAt FROM attendance_records WHERE studentId = ? AND sessionId IN (${placeholders})`, [studentId, ...sessionIds], (err, records) => {
       if (err) return res.status(500).json({ error: err.message });
 
       const attendanceMap = {};
-      records.forEach(r => attendanceMap[r.sessionId] = r.status); // usually 'present'
+      const timeMap = {};
+      records.forEach(r => {
+        attendanceMap[r.sessionId] = r.status; // usually 'present'
+        timeMap[r.sessionId] = r.markedAt;
+      });
 
-      // 3. Match with timetable to get venue and time
+      // 3. Match with timetable to get venue
       db.get('SELECT division, coreBatch, electiveSubject, electiveBatch FROM users WHERE id = ?', [studentId], (err, student) => {
         if (err || !student) return res.json([]);
         
@@ -1731,7 +1737,6 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
             const dayStr = days[date.getDay()];
             
             let venue = 'Campus';
-            let timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
             
             const matchingSlot = tSlots.find(t => 
               t.facultyId === s.facultyId && 
@@ -1741,10 +1746,13 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
             
             if (matchingSlot) {
               venue = matchingSlot.venue;
-              timeStr = `${matchingSlot.startTime} - ${matchingSlot.endTime}`;
             } else if (s.courseCode.toLowerCase().includes('seminar')) {
               venue = 'Seminar Hall';
             }
+            
+            // Use markedAt if available, otherwise fallback to session creation time
+            const recordTime = timeMap[s.sessionId] ? new Date(timeMap[s.sessionId]) : date;
+            const timeStr = recordTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
             
             return {
               sessionId: s.sessionId,

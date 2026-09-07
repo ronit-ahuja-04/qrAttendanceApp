@@ -749,6 +749,8 @@ AttendanceSession _parseSession(Map<String, dynamic> json) {
     batchTarget: json['batchTarget'],
     slotId: json['slotId'],
     presentCount: json['presentCount'] ?? 0,
+    firstLogTime: json['firstLogTime'] != null ? DateTime.parse(json['firstLogTime']).toLocal() : null,
+    lastLogTime: json['lastLogTime'] != null ? DateTime.parse(json['lastLogTime']).toLocal() : null,
   );
 }
 
