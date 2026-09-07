@@ -985,6 +985,13 @@ class _LiveCountdownCard extends StatelessWidget {
                   color: context.colors.vesitGreen,
                   bgColor: context.colors.vesitGreen.withValues(alpha: 0.15),
                 ),
+              if (session['original_session']?['batchTarget'] != null)
+                _InfoPill(
+                  icon: Icons.groups_outlined,
+                  text: session['original_session']['batchTarget'],
+                  color: Colors.purple.shade700,
+                  bgColor: Colors.purple.shade700.withValues(alpha: 0.15),
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1079,6 +1086,13 @@ class _SessionTile extends StatelessWidget {
                         text: session['original_session']['venue'],
                         color: context.colors.vesitGreen,
                         bgColor: context.colors.vesitGreen.withValues(alpha: 0.15),
+                      ),
+                    if (session['original_session']?['batchTarget'] != null)
+                      _InfoPill(
+                        icon: Icons.groups_outlined,
+                        text: session['original_session']['batchTarget'],
+                        color: Colors.purple.shade700,
+                        bgColor: Colors.purple.shade700.withValues(alpha: 0.15),
                       ),
                   ],
                 ),
