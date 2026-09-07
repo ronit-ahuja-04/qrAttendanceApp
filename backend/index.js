@@ -1930,7 +1930,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
   });
 });
 
-function notifyTimetableUpdate(facultyId, subject, batchTarget) {
+function notifyTimetableUpdate(facultyId, subject, batchTarget, day, slotId) {
   db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
     if (err || !faculty) return;
     const facultyName = faculty.name;
@@ -1958,9 +1958,11 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget) {
                 notifyClients(studentId, {
                   type: 'TIMETABLE_UPDATED',
                   title: 'Schedule Change',
-                  body: title
+                  body: title,
+                  day: day,
+                  slotId: slotId
                 });
-                sendPushNotification(studentId, 'Schedule Change', title, { type: 'TIMETABLE_UPDATED' });
+                sendPushNotification(studentId, 'Schedule Change', title, { type: 'TIMETABLE_UPDATED', day: day, slotId: slotId });
               }
             }
           );
@@ -2079,7 +2081,7 @@ app.post('/api/timetable', (req, res) => {
       [id, facultyId, day, subject, type, batchTarget, venue, startTime, endTime],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        notifyTimetableUpdate(facultyId, subject, batchTarget);
+        notifyTimetableUpdate(facultyId, subject, batchTarget, day, id);
         res.json({ id });
       }
     );
@@ -2101,7 +2103,7 @@ app.put('/api/timetable/:id', (req, res) => {
       [day, subject, type, batchTarget, venue, startTime, endTime, id],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        notifyTimetableUpdate(facultyId, subject, batchTarget);
+        notifyTimetableUpdate(facultyId, subject, batchTarget, day, id);
         res.json({ success: true });
       }
     );
@@ -2112,13 +2114,13 @@ app.put('/api/timetable/:id', (req, res) => {
 app.delete('/api/timetable/:id', (req, res) => {
   const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
   // We need facultyId, subject, batchTarget for notification before deleting
-  db.get('SELECT facultyId, subject, batchTarget FROM timetable_slots WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT facultyId, subject, batchTarget, day FROM timetable_slots WHERE id = ?', [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Slot not found' });
 
     db.run('DELETE FROM timetable_slots WHERE id = ?', [id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      notifyTimetableUpdate(row.facultyId, row.subject, row.batchTarget);
+      notifyTimetableUpdate(row.facultyId, row.subject, row.batchTarget, row.day, null);
       res.json({ success: true });
     });
   });

@@ -183,32 +183,60 @@ class NotificationService {
     
     try {
       final data = jsonDecode(payload);
-      final type = data['type'] as String?;
+      final type = data['type'] as String? ?? '';
       final role = AmsGlobals.loggedInUser?.role;
       
+      void goHome() {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+      
       if (type == 'TIMETABLE_UPDATED') {
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => (role == 'faculty' || role == 'faculty coordinator') ? const FacultyReadonlyTimetableScreen() : const StudentTimetableScreen()
-        ));
-      } else if (type != null && type.startsWith('PROXY_')) {
-        if (role == 'faculty' || role == 'faculty coordinator') {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProxyApprovalsScreen()));
+        int? initialDay;
+        final dayStr = data['day'] as String?;
+        if (dayStr != null) {
+          final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+          final index = days.indexOf(dayStr);
+          if (index != -1) initialDay = index;
         }
-      } else if (type == 'ATTENDANCE_MARKED') {
+        final slotId = data['slotId'] as String?;
+        
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => (role == 'faculty' || role == 'faculty coordinator') 
+              ? FacultyReadonlyTimetableScreen(initialDay: initialDay, highlightSlotId: slotId) 
+              : StudentTimetableScreen(scrollController: null, initialDay: initialDay, highlightSlotId: slotId)
+        ));
+      } else if (type == 'ATTENDANCE_MARKED' || type == 'ATTENDANCE_MARKED_PROXY' || type.contains('proxy')) {
         if (role == 'student') {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen(scrollController: null)));
+        } else {
+          goHome();
+        }
+      } else if (type == 'ATTENDANCE_ON_HOLD') {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+      } else if (type == 'REMINDER') {
+        goHome();
+      } else if (type.startsWith('PROXY_')) {
+        if (role == 'faculty' || role == 'faculty coordinator') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProxyApprovalsScreen()));
+        } else {
+          goHome();
         }
       } else if (type == 'ATTENDANCE_SUBMITTED') {
         if (role == 'faculty' || role == 'faculty coordinator') {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultySessionHistoryScreen()));
+        } else {
+          goHome();
         }
       } else {
-        // Fallback to inbox
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+        // Fallback is Home Page
+        goHome();
       }
     } catch (e) {
       print('Error handling notification tap routing: $e');
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+      final ctx = _navigatorKey?.currentState?.context;
+      if (ctx != null) {
+        Navigator.of(ctx).popUntil((route) => route.isFirst);
+      }
     }
   }
 

@@ -6,9 +6,14 @@ import '../widgets/tactile_widgets.dart';
 import '../widgets/vesit_widgets.dart';
 import 'student_dashboard_screen.dart';
 
+import 'dart:async';
+import '../ams/notification_service.dart';
+
 class StudentTimetableScreen extends StatefulWidget {
   final ScrollController? scrollController;
-  const StudentTimetableScreen({super.key, this.scrollController});
+  final int? initialDay;
+  final String? highlightSlotId;
+  const StudentTimetableScreen({super.key, this.scrollController, this.initialDay, this.highlightSlotId});
 
   @override
   State<StudentTimetableScreen> createState() => _StudentTimetableScreenState();
@@ -18,11 +23,24 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _slots = [];
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  StreamSubscription? _notifSub;
 
   @override
   void initState() {
     super.initState();
     _fetchTimetable();
+    
+    _notifSub = NotificationService().events.listen((data) {
+      if (data['type'] == 'TIMETABLE_UPDATED') {
+        _fetchTimetable();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchTimetable() async {
@@ -61,8 +79,12 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
 
   @override
   Widget build(BuildContext context) {
+    int today = DateTime.now().weekday;
+    int initialIndex = widget.initialDay ?? ((today >= 1 && today <= 5) ? today - 1 : 0);
+    
     return DefaultTabController(
       length: _days.length,
+      initialIndex: initialIndex,
       child: Scaffold(
         backgroundColor: context.colors.vesitGray,
         appBar: AppBar(
@@ -112,6 +134,7 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
                         slot: slot,
                         formattedStart: _formatTimeString(slot['startTime'] as String? ?? 'N/A'),
                         formattedEnd: _formatTimeString(slot['endTime'] as String? ?? 'N/A'),
+                        isHighlighted: widget.highlightSlotId != null && slot['id'].toString() == widget.highlightSlotId,
                       );
                     },
                   );
@@ -128,17 +151,19 @@ class _StudentSlotCard extends StatelessWidget {
   final Map<String, dynamic> slot;
   final String formattedStart;
   final String formattedEnd;
+  final bool isHighlighted;
 
   const _StudentSlotCard({
     required this.slot,
     required this.formattedStart,
     required this.formattedEnd,
+    this.isHighlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final type = slot['type'] as String? ?? 'Lecture';
-    final subject = slot['subject'] as String? ?? 'Unknown Subject';
+    final subject = AmsGlobals.formatSubjectName(slot['subject'] as String? ?? 'Unknown Subject');
     final venue = slot['venue'] as String? ?? 'Unknown Venue';
     final rawFacultyName = slot['facultyName'] as String? ?? 'Unknown Faculty';
     final facultyName = AmsGlobals.formatFacultyName(rawFacultyName);
@@ -146,14 +171,23 @@ class _StudentSlotCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: VesitCard(
-        padding: EdgeInsets.zero,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: isLab ? context.colors.vesitOrange : context.colors.vesitPrimary, width: 6)),
-            ),
+      child: Container(
+        decoration: isHighlighted
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: context.colors.vesitPrimary.withOpacity(0.5), blurRadius: 12, spreadRadius: 2),
+                ],
+              )
+            : null,
+        child: VesitCard(
+          padding: EdgeInsets.zero,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: isLab ? context.colors.vesitOrange : context.colors.vesitPrimary, width: 6)),
+              ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(

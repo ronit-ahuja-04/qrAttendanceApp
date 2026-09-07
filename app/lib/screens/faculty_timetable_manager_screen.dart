@@ -20,8 +20,13 @@ String _formatTimeString(String timeStr) {
   }
 }
 
+import 'dart:async';
+import '../ams/notification_service.dart';
+
 class FacultyTimetableManagerScreen extends StatefulWidget {
-  const FacultyTimetableManagerScreen({super.key});
+  final int? initialDay;
+  final String? highlightSlotId;
+  const FacultyTimetableManagerScreen({super.key, this.initialDay, this.highlightSlotId});
 
   @override
   State<FacultyTimetableManagerScreen> createState() => _FacultyTimetableManagerScreenState();
@@ -29,6 +34,31 @@ class FacultyTimetableManagerScreen extends StatefulWidget {
 
 class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerScreen> {
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  StreamSubscription? _notifSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _notifSub = NotificationService().events.listen((data) async {
+      if (data['type'] == 'TIMETABLE_UPDATED') {
+        final updatedSlots = await AmsGlobals.sessionService.getTimetable(AmsGlobals.loggedInUser!.id);
+        if (mounted) {
+          setState(() {
+            AmsGlobals.timetableSlots.clear();
+            AmsGlobals.timetableSlots.addAll(updatedSlots);
+            _sortSlots();
+            AmsGlobals.refreshNotifier.value++;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
+  }
 
   void _showAddSlotModal(String initialDay) {
     showModalBottomSheet(
@@ -216,8 +246,12 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
 
   @override
   Widget build(BuildContext context) {
+    int today = DateTime.now().weekday;
+    int initialIndex = widget.initialDay ?? ((today >= 1 && today <= 5) ? today - 1 : 0);
+
     return DefaultTabController(
       length: _days.length,
+      initialIndex: initialIndex,
       child: Scaffold(
         backgroundColor: context.colors.vesitGray,
         appBar: AppBar(
@@ -266,6 +300,7 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
                   formattedEnd: _formatTimeString(slot['endTime'] as String? ?? 'N/A'),
                   onDelete: () => _deleteSlot(slot),
                   onEdit: () => _showEditSlotModal(slot),
+                  highlightSlotId: widget.highlightSlotId,
                 );
               },
             );
@@ -293,22 +328,28 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
 }
 
 class _SlotCard extends StatelessWidget {
-  const _SlotCard({required this.slot, required this.formattedStart, required this.formattedEnd, required this.onDelete, required this.onEdit});
+  const _SlotCard({required this.slot, required this.formattedStart, required this.formattedEnd, required this.onDelete, required this.onEdit, this.highlightSlotId});
   final Map<String, dynamic> slot;
   final String formattedStart;
   final String formattedEnd;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
+  final String? highlightSlotId;
 
   @override
   Widget build(BuildContext context) {
     final bool isLab = slot['type'] == 'Lab';
+    final isHighlighted = highlightSlotId != null && slot['id'].toString() == highlightSlotId;
+                            
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: context.colors.vesitWhite,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        border: isHighlighted ? Border.all(color: context.colors.vesitPrimary, width: 2) : null,
+        boxShadow: isHighlighted 
+            ? [BoxShadow(color: context.colors.vesitPrimary.withOpacity(0.5), blurRadius: 12, spreadRadius: 2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Material(
         color: Colors.transparent,
@@ -322,7 +363,7 @@ class _SlotCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      slot['subject'],
+                      AmsGlobals.formatSubjectName(slot['subject']),
                       style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitTextHeading, fontSize: 18),
                     ),
                   ),

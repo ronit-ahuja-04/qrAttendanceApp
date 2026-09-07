@@ -870,7 +870,9 @@ class _UpcomingSessionsList extends StatelessWidget {
                     // Calculate true course code
                     String baseSubject = session['subject'] as String? ?? 'N/A';
                     String type = session['type'] as String? ?? 'Lecture';
-                    String trueCourseCode = '$baseSubject - $type';
+                    String trueCourseCode = type.isNotEmpty 
+                        ? '${AmsGlobals.formatSubjectName(baseSubject)} - $type'
+                        : AmsGlobals.formatSubjectName(baseSubject);
                     String targetBatch = session['batchTarget'] as String? ?? '';
                     
                     bool sessionExistsToday = false;
@@ -1413,7 +1415,8 @@ class _RecentSessionsList extends StatelessWidget {
         final isPendingProxy = isMyProxyToApprove && session.approvalStatus == 'pending';
         
         final isProxiedByMeAndWonCredit = session.proxyFacultyId != null && session.proxyFacultyId == session.facultyId;
-        final displayCourseCode = isProxiedByMeAndWonCredit ? '${session.courseCode} (Proxied)' : session.courseCode;
+        final formattedCourseCode = AmsGlobals.formatSubjectName(session.courseCode);
+        final displayCourseCode = isProxiedByMeAndWonCredit ? '$formattedCourseCode (Proxied)' : formattedCourseCode;
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),

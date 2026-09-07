@@ -19,8 +19,13 @@ String _formatTimeString(String timeStr) {
   }
 }
 
+import 'dart:async';
+import '../ams/notification_service.dart';
+
 class FacultyReadonlyTimetableScreen extends StatefulWidget {
-  const FacultyReadonlyTimetableScreen({super.key});
+  final int? initialDay;
+  final String? highlightSlotId;
+  const FacultyReadonlyTimetableScreen({super.key, this.initialDay, this.highlightSlotId});
 
   @override
   State<FacultyReadonlyTimetableScreen> createState() => _FacultyReadonlyTimetableScreenState();
@@ -30,11 +35,24 @@ class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetabl
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   bool _isLoading = true;
   List<Map<String, dynamic>> _slots = [];
+  StreamSubscription? _notifSub;
 
   @override
   void initState() {
     super.initState();
     _loadTimetable();
+    
+    _notifSub = NotificationService().events.listen((data) {
+      if (data['type'] == 'TIMETABLE_UPDATED') {
+        _loadTimetable();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadTimetable() async {
@@ -58,8 +76,12 @@ class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetabl
 
   @override
   Widget build(BuildContext context) {
+    int today = DateTime.now().weekday;
+    int initialIndex = widget.initialDay ?? ((today >= 1 && today <= 5) ? today - 1 : 0);
+    
     return DefaultTabController(
       length: _days.length,
+      initialIndex: initialIndex,
       child: Scaffold(
         backgroundColor: context.colors.vesitGray,
         appBar: AppBar(
@@ -105,6 +127,7 @@ class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetabl
                   slot: slot,
                   formattedStart: _formatTimeString(slot['startTime'] as String? ?? 'N/A'),
                   formattedEnd: _formatTimeString(slot['endTime'] as String? ?? 'N/A'),
+                  isHighlighted: widget.highlightSlotId != null && slot['id'].toString() == widget.highlightSlotId,
                 );
               },
             );
@@ -116,10 +139,11 @@ class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetabl
 }
 
 class _ReadonlySlotCard extends StatelessWidget {
-  const _ReadonlySlotCard({required this.slot, required this.formattedStart, required this.formattedEnd});
+  const _ReadonlySlotCard({required this.slot, required this.formattedStart, required this.formattedEnd, this.isHighlighted = false});
   final Map<String, dynamic> slot;
   final String formattedStart;
   final String formattedEnd;
+  final bool isHighlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -129,7 +153,10 @@ class _ReadonlySlotCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.colors.vesitWhite,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        border: isHighlighted ? Border.all(color: context.colors.vesitPrimary, width: 2) : null,
+        boxShadow: isHighlighted 
+            ? [BoxShadow(color: context.colors.vesitPrimary.withOpacity(0.5), blurRadius: 12, spreadRadius: 2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -137,7 +164,7 @@ class _ReadonlySlotCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              slot['subject'],
+              AmsGlobals.formatSubjectName(slot['subject']),
               style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitTextHeading, fontSize: 18),
             ),
             const SizedBox(height: 8),
