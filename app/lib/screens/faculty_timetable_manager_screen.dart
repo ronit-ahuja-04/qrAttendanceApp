@@ -469,12 +469,12 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     
     if (subjectScopes.isNotEmpty) {
       final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture');
-      _types = {'Lecture', 'Practical', 'Tutorial', ...scopeTypes}.toList()..sort();
+      _types = {'Lecture', 'Lab', ...scopeTypes}.toList()..sort();
       if (!_types.contains(_type)) _type = 'Lecture';
       
       _updateBatchesForType();
     } else {
-      _types = ['Lecture', 'Practical', 'Tutorial'];
+      _types = ['Lecture', 'Lab'];
       _type = 'Lecture';
       _batches = ['Unknown Batch'];
       _batch = 'Unknown Batch';
