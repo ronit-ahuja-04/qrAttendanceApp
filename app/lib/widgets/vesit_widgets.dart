@@ -374,7 +374,7 @@ class VesitDropdown<T> extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final T value;
+  final T? value;
   final List<T> items;
   final ValueChanged<T?> onChanged;
   final String Function(T) itemLabel;

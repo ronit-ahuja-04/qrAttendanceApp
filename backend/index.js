@@ -1401,7 +1401,16 @@ app.get('/api/report/bulk-excel', (req, res) => {
   let q = `
     SELECT id, courseCode, batchTarget, createdAt, enrolledStudentIds 
     FROM sessions 
-    WHERE (facultyId = ? OR proxyFacultyId = ?) 
+    WHERE 1=1
+  `;
+  let params = [];
+
+  if (facultyId !== 'ALL') {
+    q += ` AND (facultyId = ? OR proxyFacultyId = ?) `;
+    params.push(facultyId, facultyId);
+  }
+
+  q += `
       AND (
         LOWER(TRIM(courseCode)) = LOWER(TRIM(?)) 
         OR LOWER(TRIM(courseCode)) LIKE LOWER(TRIM(?)) || ' -%'
@@ -1416,7 +1425,7 @@ app.get('/api/report/bulk-excel', (req, res) => {
   const endObj = new Date(endDate);
   endObj.setHours(23, 59, 59, 999);
   
-  let params = [facultyId, facultyId, subject, subject, startObj.toISOString(), endObj.toISOString()];
+  params.push(subject, subject, startObj.toISOString(), endObj.toISOString());
   
   if (batchTarget && batchTarget !== 'All') {
     q += ' AND LOWER(TRIM(batchTarget)) = LOWER(TRIM(?))';

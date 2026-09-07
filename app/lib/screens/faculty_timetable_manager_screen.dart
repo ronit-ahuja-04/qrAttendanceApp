@@ -410,14 +410,14 @@ class _AddSlotModal extends StatefulWidget {
 }
 
 class _AddSlotModalState extends State<_AddSlotModal> {
-  List<String> _subjects = ['Unknown Subject'];
+  List<String> _subjects = [];
   List<String> _types = ['Lecture'];
-  List<String> _batches = ['Unknown Batch'];
+  List<String> _batches = [];
   
   late String _day;
   String _subject = '';
   String _type = 'Lecture';
-  String _batch = 'Unknown Batch';
+  String _batch = '';
   
   final _venueController = TextEditingController();
   final _subjectController = TextEditingController();
@@ -441,7 +441,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       _subjectController.text = _subject;
       
       _type = slot['type'] ?? 'Lecture';
-      _batch = slot['batchTarget'] ?? 'Unknown Batch';
+      _batch = slot['batchTarget'] ?? '';
       _batchController.text = _batch;
 
       _updateDependentDropdowns();
@@ -461,12 +461,12 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   void _initScopes() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
     if (scopes.isNotEmpty) {
-      _subjects = scopes.map((s) => s['subject']?.toString() ?? 'Unknown Subject').toSet().toList()..sort();
-      _subject = _subjects.isNotEmpty ? _subjects.first : 'Unknown Subject';
+      _subjects = scopes.map((s) => s['subject']?.toString() ?? '').toSet().toList()..sort();
+      _subject = _subjects.isNotEmpty ? _subjects.first : '';
       _updateDependentDropdowns();
     }
-    if (_subjects.isEmpty) _subjects = ['Unknown Subject'];
-    if (_subject.isEmpty) _subject = _subjects.first;
+    if (_subjects.isEmpty) _subjects = [''];
+    if (_subject.isEmpty) _subject = _subjects.isNotEmpty ? _subjects.first : '';
   }
 
   void _updateDependentDropdowns() {
@@ -474,16 +474,17 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
     
     if (subjectScopes.isNotEmpty) {
-      final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture');
-      _types = {'Lecture', 'Lab', ...scopeTypes}.toList()..sort();
-      if (!_types.contains(_type)) _type = 'Lecture';
+      final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet();
+      _types = scopeTypes.toList()..sort();
+      if (_types.isEmpty) _types = ['Lecture'];
+      if (!_types.contains(_type)) _type = _types.first;
       
       _updateBatchesForType();
     } else {
       _types = ['Lecture', 'Lab'];
       _type = 'Lecture';
-      _batches = ['Unknown Batch'];
-      _batch = 'Unknown Batch';
+      _batches = [''];
+      _batch = '';
     }
   }
 
@@ -492,25 +493,25 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
     
     if (validScopes.isNotEmpty) {
-      _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? 'Unknown Batch').toSet().toList()..sort();
+      _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? '').toSet().toList()..sort();
       
       if (_type.toLowerCase() == 'lecture') {
         _batches = _batches.where((b) => !b.toLowerCase().contains('batch')).toList();
-        if (_batches.isEmpty) _batches = ['Unknown Batch'];
+        if (_batches.isEmpty) _batches = [''];
       }
 
       if (!_batches.contains(_batch)) {
         if (_type.toLowerCase() == 'lecture') {
           // Prefer 'All' or 'TE -' for lectures
           final allBatch = _batches.where((b) => b.toLowerCase().contains('all') || b.toLowerCase().startsWith('te -')).firstOrNull;
-          _batch = allBatch ?? (_batches.isNotEmpty ? _batches.first : 'Unknown Batch');
+          _batch = allBatch ?? (_batches.isNotEmpty ? _batches.first : '');
         } else {
-          _batch = _batches.isNotEmpty ? _batches.first : 'Unknown Batch';
+          _batch = _batches.isNotEmpty ? _batches.first : '';
         }
       }
     } else {
-      _batches = ['Unknown Batch'];
-      _batch = 'Unknown Batch';
+      _batches = [''];
+      _batch = '';
     }
   }
 
@@ -672,11 +673,21 @@ class _AddSlotModalState extends State<_AddSlotModal> {
               ),
               const SizedBox(height: 16),
 
-              VesitTextField(
-                label: 'Subject',
-                icon: Icons.book_outlined,
-                controller: _subjectController,
-              ),
+                VesitDropdown<String>(
+                  label: 'Subject',
+                  icon: Icons.book_outlined,
+                  value: _subject.isEmpty ? null : _subject,
+                  items: _subjects,
+                  itemLabel: (v) => v,
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() {
+                        _subject = v;
+                        _updateDependentDropdowns();
+                      });
+                    }
+                  },
+                ),
               const SizedBox(height: 16),
               VesitDropdown<String>(
                 label: 'Session Type',
@@ -693,14 +704,23 @@ class _AddSlotModalState extends State<_AddSlotModal> {
                   }
                 },
               ),
-              if (_type != 'Lecture') ...[
-                const SizedBox(height: 16),
-                VesitTextField(
-                  label: 'Batch',
-                  icon: Icons.people,
-                  controller: _batchController,
-                ),
-              ],
+                if (_type.toLowerCase() != 'lecture') ...[
+                  const SizedBox(height: 16),
+                  VesitDropdown<String>(
+                    label: 'Batch',
+                    icon: Icons.people_outline,
+                    value: _batch.isEmpty ? null : _batch,
+                    items: _batches,
+                    itemLabel: (v) => v,
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _batch = v;
+                        });
+                      }
+                    },
+                  ),
+                ],
               
               const SizedBox(height: 16),
               VesitTextField(

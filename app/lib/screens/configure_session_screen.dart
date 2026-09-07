@@ -19,8 +19,8 @@ class ConfigureSessionScreen extends StatefulWidget {
 }
 
 class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
-  List<String> _subjects = ['Unknown Subject'];
-  List<String> _batches = ['Unknown Batch'];
+  List<String> _subjects = [];
+  List<String> _batches = [];
   List<String> _sessionTypes = ['Lecture (60 Mins)'];
 
   String _batch = '';
@@ -45,8 +45,8 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
       _subject = _subjects.isNotEmpty ? _subjects.first : '';
       _updateDependentDropdowns();
     }
-    if (_subjects.isEmpty) _subjects = ['Unknown Subject'];
-    if (_subject.isEmpty) _subject = _subjects.first;
+    if (_subjects.isEmpty) _subjects = [''];
+    if (_subject.isEmpty) _subject = _subjects.isNotEmpty ? _subjects.first : '';
   }
 
   void _updateDependentDropdowns() {
@@ -63,8 +63,8 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
     } else {
       _sessionTypes = ['Lecture'];
       _sessionType = 'Lecture';
-      _batches = ['Unknown Batch'];
-      _batch = 'Unknown Batch';
+      _batches = [''];
+      _batch = '';
     }
   }
 
@@ -78,10 +78,10 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
     
     if (validScopes.isNotEmpty) {
       _batches = validScopes.map((s) => s['batchTarget'] as String).toSet().toList()..sort();
-      if (!_batches.contains(_batch)) _batch = _batches.isNotEmpty ? _batches.first : 'Unknown Batch';
+      if (!_batches.contains(_batch)) _batch = _batches.isNotEmpty ? _batches.first : '';
     } else {
-      _batches = ['Unknown Batch'];
-      _batch = 'Unknown Batch';
+      _batches = [''];
+      _batch = '';
     }
   }
 
@@ -139,10 +139,20 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        VesitTextField(
+                        VesitDropdown<String>(
                           label: 'Subject',
                           icon: Icons.book_outlined,
-                          controller: _subjectController,
+                          value: _subject.isEmpty ? null : _subject,
+                          items: _subjects,
+                          itemLabel: (v) => v,
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                _subject = v;
+                                _updateDependentDropdowns();
+                              });
+                            }
+                          },
                         ),
                         const SizedBox(height: 20),
                         VesitDropdown<String>(
@@ -162,10 +172,19 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
                         ),
                         if (!_sessionType.toLowerCase().contains('lecture')) ...[
                           const SizedBox(height: 20),
-                          VesitTextField(
+                          VesitDropdown<String>(
                             label: 'Batch',
                             icon: Icons.people_outline,
-                            controller: _batchController,
+                            value: _batch.isEmpty ? null : _batch,
+                            items: _batches,
+                            itemLabel: (v) => v,
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  _batch = v;
+                                });
+                              }
+                            },
                           ),
                         ],
                         const SizedBox(height: 20),

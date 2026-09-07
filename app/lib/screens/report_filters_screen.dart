@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/tactile_widgets.dart';
 import '../widgets/vesit_widgets.dart';
 import '../ams/globals.dart';
+import '../ams/api_services.dart' show baseUrl, httpClient;
 import 'report_timeline_screen.dart';
 
 /// "Report Details" — Step 1 of 3 in the Generate Report flow. Mirrors the
@@ -23,6 +25,7 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
   late String _subject;
   late List<String> _batchTargets;
   late String _batchTarget;
+  List<Map<String, dynamic>> _globalSlots = [];
 
   String _cleanSubject(String subject) {
     return subject.replaceAll(RegExp(r'\s*-\s*(Lecture|Normal|Practical|Lab|Tutorial)$', caseSensitive: false), '').trim();
@@ -43,11 +46,36 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
     _subject = _subjects.first;
   }
 
+  Future<void> _fetchGlobalSubjectsForCoordinator() async {
+    final user = AmsGlobals.loggedInUser;
+    if (user != null && user.isCoordinator) {
+      try {
+        final res = await httpClient.get(Uri.parse('$baseUrl/timetable'));
+        if (res.statusCode == 200) {
+          final List<dynamic> data = jsonDecode(res.body);
+          _globalSlots = data.map((e) => e as Map<String, dynamic>).toList();
+          final globalSubjects = _globalSlots.map((s) => _cleanSubject(s['subject'] as String)).toList();
+          if (mounted) {
+            setState(() {
+              _subjects = [..._subjects, ...globalSubjects].toSet().toList();
+              _subjects.sort();
+              _subject = _subjects.first;
+              _updateBatchTargets();
+            });
+          }
+        }
+      } catch (e) {
+        print('Error fetching global subjects for coordinator: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _initSubjects();
     _updateBatchTargets();
+    _fetchGlobalSubjectsForCoordinator();
   }
 
   void _updateBatchTargets() {
@@ -63,7 +91,12 @@ class _ReportFiltersScreenState extends State<ReportFiltersScreen> {
         .map((s) => s.batchTarget ?? 'All')
         .toList();
 
-    _batchTargets = [...timetableBatches, ...customBatches].toSet().toList();
+    final globalBatches = _globalSlots
+        .where((s) => _cleanSubject(s['subject']) == _subject)
+        .map((s) => (s['batchTarget'] as String?) ?? 'All')
+        .toList();
+
+    _batchTargets = [...timetableBatches, ...customBatches, ...globalBatches].toSet().toList();
     _batchTargets.sort();
     if (_batchTargets.isEmpty) _batchTargets = ['All'];
     _batchTarget = _batchTargets.first;

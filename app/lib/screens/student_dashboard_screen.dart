@@ -986,11 +986,28 @@ class _LiveCountdownCard extends StatelessWidget {
                   bgColor: context.colors.vesitGreen.withValues(alpha: 0.15),
                 ),
               if (session['original_session']?['batchTarget'] != null)
-                _InfoPill(
-                  icon: Icons.groups_outlined,
-                  text: session['original_session']['batchTarget'],
-                  color: Colors.purple.shade700,
-                  bgColor: Colors.purple.shade700.withValues(alpha: 0.15),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AmsGlobals.getBatchColor(session['original_session']['batchTarget'])
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                        color: AmsGlobals.getBatchColor(
+                                session['original_session']['batchTarget'])
+                            .withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    session['original_session']['batchTarget'],
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          AmsGlobals.getBatchColor(session['original_session']['batchTarget']),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
           ),
@@ -1088,11 +1105,28 @@ class _SessionTile extends StatelessWidget {
                         bgColor: context.colors.vesitGreen.withValues(alpha: 0.15),
                       ),
                     if (session['original_session']?['batchTarget'] != null)
-                      _InfoPill(
-                        icon: Icons.groups_outlined,
-                        text: session['original_session']['batchTarget'],
-                        color: Colors.purple.shade700,
-                        bgColor: Colors.purple.shade700.withValues(alpha: 0.15),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AmsGlobals.getBatchColor(session['original_session']['batchTarget'])
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: AmsGlobals.getBatchColor(
+                                      session['original_session']['batchTarget'])
+                                  .withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          session['original_session']['batchTarget'],
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color:
+                                AmsGlobals.getBatchColor(session['original_session']['batchTarget']),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                 ),
