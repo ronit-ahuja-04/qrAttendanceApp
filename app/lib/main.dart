@@ -170,7 +170,7 @@ class _AmsBootLoaderState extends State<AmsBootLoader> {
         }
 
         if (!mounted) return;
-        if (user.role == 'faculty') {
+        if (user.isFaculty) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const FacultyMainLayout()),
           );

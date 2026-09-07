@@ -188,10 +188,10 @@ class NotificationService {
       
       if (type == 'TIMETABLE_UPDATED') {
         Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => role == 'faculty' ? const FacultyReadonlyTimetableScreen() : const StudentTimetableScreen()
+          builder: (_) => (role == 'faculty' || role == 'faculty coordinator') ? const FacultyReadonlyTimetableScreen() : const StudentTimetableScreen()
         ));
       } else if (type != null && type.startsWith('PROXY_')) {
-        if (role == 'faculty') {
+        if (role == 'faculty' || role == 'faculty coordinator') {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProxyApprovalsScreen()));
         }
       } else if (type == 'ATTENDANCE_MARKED') {
@@ -199,7 +199,7 @@ class NotificationService {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen(scrollController: null)));
         }
       } else if (type == 'ATTENDANCE_SUBMITTED') {
-        if (role == 'faculty') {
+        if (role == 'faculty' || role == 'faculty coordinator') {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultySessionHistoryScreen()));
         }
       } else {

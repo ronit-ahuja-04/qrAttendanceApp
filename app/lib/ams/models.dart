@@ -171,8 +171,11 @@ class User {
   final List<Map<String, dynamic>>? scopes;
   final String? token;
 
+  bool get isFaculty => role == 'faculty' || role == 'faculty coordinator';
+  bool get isCoordinator => role == 'faculty coordinator';
+
   String get formattedName {
-    if (role == 'faculty') {
+    if (isFaculty) {
       return AmsGlobals.formatFacultyName(name);
     } else {
       return AmsGlobals.formatStudentName(name, email);

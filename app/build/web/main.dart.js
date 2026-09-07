@@ -109679,8 +109679,10 @@ gIg(){return this.x},
 gIb(){return this.as}}
 A.k4.prototype={}
 A.Kv.prototype={
-gvB(){var s=this.c
-if(this.b==="faculty")return A.adu(s)
+gvB(){var s,r=this.b
+r=r==="faculty"||r==="faculty coordinator"
+s=this.c
+if(r)return A.adu(s)
 else return A.ady(s,this.d)},
 a4r(a){var s=this,r=a==null?s.f:a
 return new A.Kv(s.a,s.b,s.c,s.d,s.e,r,s.r,s.w,s.x,s.y,s.z,s.Q)},
@@ -109747,18 +109749,18 @@ return}this.a_5(s)}},
 a6e(){var s=$.aZu
 if(s!=null){this.a_5(s)
 $.aZu=null}},
-a_5(a){var s,r,q,p,o,n,m=null,l=this.c,k=m
-if(!(l==null)){l=l.gR()
-if(!(l==null)){l=l.c
-l.toString
-k=l}}s=k
+a_5(a){var s,r,q,p,o,n,m=null,l="faculty coordinator",k=this.c,j=m
+if(!(k==null)){k=k.gR()
+if(!(k==null)){k=k.c
+k.toString
+j=k}}s=j
 if(s==null)return
 try{r=B.M.cQ(0,a,m)
 q=A.as(J.a4(r,"type"))
-l=$.bz
-p=l==null?m:l.b
+k=$.bz
+p=k==null?m:k.b
 if(J.c(q,"TIMETABLE_UPDATED"))A.aZ(s,!1).cA(A.cq(new A.asc(p),m,t.z))
-else if(q!=null&&B.c.bz(q,"PROXY_")){if(J.c(p,"faculty"))A.aZ(s,!1).cA(A.cq(new A.asd(),m,t.z))}else if(J.c(q,"ATTENDANCE_MARKED")){if(J.c(p,"student"))A.aZ(s,!1).cA(A.cq(new A.ase(),m,t.z))}else if(J.c(q,"ATTENDANCE_SUBMITTED")){if(J.c(p,"faculty"))A.aZ(s,!1).cA(A.cq(new A.asf(),m,t.z))}else A.aZ(s,!1).cA(A.cq(new A.asg(),m,t.z))}catch(n){o=A.a3(n)
+else if(q!=null&&B.c.bz(q,"PROXY_")){if(J.c(p,"faculty")||J.c(p,l))A.aZ(s,!1).cA(A.cq(new A.asd(),m,t.z))}else if(J.c(q,"ATTENDANCE_MARKED")){if(J.c(p,"student"))A.aZ(s,!1).cA(A.cq(new A.ase(),m,t.z))}else if(J.c(q,"ATTENDANCE_SUBMITTED")){if(J.c(p,"faculty")||J.c(p,l))A.aZ(s,!1).cA(A.cq(new A.asf(),m,t.z))}else A.aZ(s,!1).cA(A.cq(new A.asg(),m,t.z))}catch(n){o=A.a3(n)
 A.cy("Error handling notification tap routing: "+A.m(o))
 A.aZ(s,!1).cA(A.cq(new A.ash(),m,t.z))}},
 wQ(a,b,c,d){return this.abJ(0,b,c,d)},
@@ -109865,7 +109867,8 @@ if(r==null)r=""
 this.a.wQ(0,r,B.M.fn(s,null),q)}this.a.e.F(0,s)},
 $S:237}
 A.asc.prototype={
-$1(a){return this.a==="faculty"?B.uh:B.a4J},
+$1(a){var s=this.a
+return s==="faculty"||s==="faculty coordinator"?B.uh:B.a4J},
 $S:655}
 A.asd.prototype={
 $1(a){return B.EL},
@@ -109972,12 +109975,12 @@ T(){return new A.a05()}}
 A.a05.prototype={
 af(){this.ar()
 this.tR()},
-tR(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a
-var $async$tR=A.p(function(a0,a1){if(a0===1){o.push(a1)
+tR(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a,a0
+var $async$tR=A.p(function(a1,a2){if(a1===1){o.push(a2)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
 return A.j(A.hJ(),$async$tR)
-case 7:m=a1
+case 7:m=a2
 l=!1
 e=window.matchMedia("(display-mode: standalone)").matches
 e.toString
@@ -109998,17 +110001,19 @@ h=$.k0().d
 if(h!=null)new A.hW().mG(i.a,h).hV(new A.aCk())
 e=n.c
 if(e==null){s=1
-break}d=t.z
-if(i.b==="faculty")A.aZ(e,!1).kS(A.cq(new A.aCl(),null,d))
-else A.aZ(e,!1).kS(A.cq(new A.aCm(),null,d))
+break}d=i.b
+d=d==="faculty"||d==="faculty coordinator"
+c=t.z
+if(d)A.aZ(e,!1).kS(A.cq(new A.aCl(),null,c))
+else A.aZ(e,!1).kS(A.cq(new A.aCm(),null,c))
 A.dS(B.aG,new A.aCn(),t.P)
 s=1
 break}p=2
 s=6
 break
 case 4:p=3
-b=o.pop()
-g=A.a3(b)
+a=o.pop()
+g=A.a3(a)
 A.cy("Bootloader error: "+A.m(g))
 s=6
 break
@@ -110017,7 +110022,7 @@ break
 case 6:p=13
 s=16
 return A.j($.d6().hq("GET",A.cc(u.l,0,null),null).II(0,B.tB),$async$tR)
-case 16:f=a1
+case 16:f=a2
 if(f.b===503){e=n.c
 if(e==null){s=1
 break}d=t.X
@@ -110027,7 +110032,7 @@ break}p=2
 s=15
 break
 case 13:p=12
-a=o.pop()
+a0=o.pop()
 s=15
 break
 case 12:s=2
@@ -111886,7 +111891,9 @@ A.a47.prototype={
 A(a){var s,r,q,p,o,n,m,l,k,j=null,i={},h=$.bz,g=h==null,f=g?j:h.gvB()
 if(f==null)f="Faculty Member"
 s=g?j:h.e
-if(s==null){if((g?j:h.b)==="faculty")s="FACULTY"
+if(s==null){if(g)s=j
+else{s=h.b
+s=s==="faculty"||s==="faculty coordinator"}if(s===!0)s="FACULTY"
 else s=g?j:h.a
 r=s}else r=s
 if(r==null)r="0000"
@@ -113545,41 +113552,41 @@ s=this.f
 s.Z$=r
 s.S$=0
 this.al()},
-lQ(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2
-var $async$lQ=A.p(function(a3,a4){if(a3===1){o.push(a4)
-s=p}for(;;)switch(s){case 0:a0=n.c
-a0.toString
-A.ub(a0).hh()
+lQ(){var s=0,r=A.u(t.H),q,p=2,o=[],n=this,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3
+var $async$lQ=A.p(function(a4,a5){if(a4===1){o.push(a5)
+s=p}for(;;)switch(s){case 0:a1=n.c
+a1.toString
+A.ub(a1).hh()
 if(!n.d.gR().k_()){s=1
-break}a0=n.r
-if(a0==="student"){if(A.aX()===B.as||A.aX()===B.bk||A.aX()===B.bj){n.c.aa(t.J).f.hL(A.mZ(null,null,null,B.eg,B.ci,B.w,null,B.a2_,null,B.cA,null,null,null,null,null,null,null,null,null,null))
+break}a1=n.r
+if(a1==="student"){if(A.aX()===B.as||A.aX()===B.bk||A.aX()===B.bj){n.c.aa(t.J).f.hL(A.mZ(null,null,null,B.eg,B.ci,B.w,null,B.a2_,null,B.cA,null,null,null,null,null,null,null,null,null,null))
 s=1
 break}if(A.aX()===B.ak){n.c.aa(t.J).f.hL(A.mZ(null,null,null,B.eg,B.ci,B.w,null,B.a20,null,B.cA,null,null,null,null,null,null,null,null,null,null))
 s=1
 break}}n.G(new A.aLI(n))
-a0=t.z
+a1=t.z
 s=3
-return A.j(A.dS(B.jN,null,a0),$async$lQ)
+return A.j(A.dS(B.jN,null,a1),$async$lQ)
 case 3:m=B.c.cI(n.e.a.a)
 l=B.c.cI(n.f.a.a)
 k=null
 p=5
 s=8
 return A.j($.dO().vQ(m,l),$async$lQ)
-case 8:k=a4
+case 8:k=a5
 s=9
-return A.j(A.dS(B.hX,null,a0),$async$lQ)
+return A.j(A.dS(B.hX,null,a1),$async$lQ)
 case 9:p=2
 s=7
 break
 case 5:p=4
-a1=o.pop()
-j=A.a3(a1)
+a2=o.pop()
+j=A.a3(a2)
 if(n.c==null){s=1
 break}n.G(new A.aLJ(n))
-a0=n.c.aa(t.J).f
+a1=n.c.aa(t.J).f
 f=J.c6(j)
-a0.hL(A.mZ(null,null,null,B.eg,B.ci,B.w,null,A.az(A.b([B.QS,B.aH,A.aR(A.B(A.db(f,"Exception: ",""),null,null,null,null,null,null,null,null),1)],t.p),B.k,B.f,B.h,0,null),null,B.cA,null,null,null,null,null,null,null,null,null,null))
+a1.hL(A.mZ(null,null,null,B.eg,B.ci,B.w,null,A.az(A.b([B.QS,B.aH,A.aR(A.B(A.db(f,"Exception: ",""),null,null,null,null,null,null,null,null),1)],t.p),B.k,B.f,B.h,0,null),null,B.cA,null,null,null,null,null,null,null,null,null,null))
 s=1
 break
 s=7
@@ -113588,62 +113595,65 @@ case 4:s=2
 break
 case 7:s=k!=null?10:12
 break
-case 10:if(k.b!==n.r){if(n.c==null){s=1
+case 10:a1=n.r
+e=a1==="faculty"&&k.b==="faculty coordinator"
+if(k.b!==a1&&!e){if(n.c==null){s=1
 break}n.G(new A.aLK(n))
-a0=k.b
+a1=k.b
 f=k.b
-e=n.c.aa(t.J).f
-f=A.B("Role mismatch: This is a "+a0+" account. Please select "+f.toUpperCase()+" above!",null,null,null,null,B.GH,null,null,null)
-a0=n.c
-a0.toString
-e.hL(A.mZ(null,null,null,A.h(a0).fy,B.ci,B.w,null,f,null,B.cA,null,null,null,B.tM,null,null,null,new A.cz(A.an(8),B.u),null,null))
+d=n.c.aa(t.J).f
+f=A.B("Role mismatch: This is a "+a1+" account. Please select "+f.toUpperCase()+" above!",null,null,null,null,B.GH,null,null,null)
+a1=n.c
+a1.toString
+d.hL(A.mZ(null,null,null,A.h(a1).fy,B.ci,B.w,null,f,null,B.cA,null,null,null,B.tM,null,null,null,new A.cz(A.an(8),B.u),null,null))
 s=1
 break}$.bz=k
 s=13
 return A.j(A.hJ(),$async$lQ)
-case 13:d=a4
-a0=window.matchMedia("(display-mode: standalone)").matches
-a0.toString
-c=B.M.fn(k.iI(),null)
-if(a0)d.qD("String","ams_user_session",c)
-else window.sessionStorage.setItem("ams_user_session",c)
-a0=A.hx(J.a4(d.a,"notif_master"))
-b=a0!==!1
-s=b?14:15
+case 13:c=a5
+a1=window.matchMedia("(display-mode: standalone)").matches
+a1.toString
+b=B.M.fn(k.iI(),null)
+if(a1)c.qD("String","ams_user_session",b)
+else window.sessionStorage.setItem("ams_user_session",b)
+a1=A.hx(J.a4(c.a,"notif_master"))
+a=a1!==!1
+s=a?14:15
 break
 case 14:p=17
-a0=$.le
-a=(a0==null?$.le=$.Dg():a0).uL("[DEFAULT]")
-A.jD(a,$.t3(),!0)
+a1=$.le
+a0=(a1==null?$.le=$.Dg():a1).uL("[DEFAULT]")
+A.jD(a0,$.t3(),!0)
 s=20
-return A.j(A.ajU(new A.ld(a)).Tt(),$async$lQ)
-case 20:i=a4
+return A.j(A.ajU(new A.ld(a0)).Tt(),$async$lQ)
+case 20:i=a5
 if(i!=null){$.k0().d=i
 new A.hW().mG(k.a,i)}p=2
 s=19
 break
 case 17:p=16
-a2=o.pop()
-h=A.a3(a2)
+a3=o.pop()
+h=A.a3(a3)
 A.cy("Error getting fresh token: "+A.m(h))
 s=19
 break
 case 16:s=2
 break
-case 19:case 15:new A.hW().By(k.a,A.ah(["notif_master",b],t.N,t.y))
-a0=n.c
-if(a0==null){s=1
-break}a0=A.aZ(a0,!1)
-a0.kS(A.ajs(k.b==="student"?B.iQ:B.uf))
+case 19:case 15:new A.hW().By(k.a,A.ah(["notif_master",a],t.N,t.y))
+a1=n.c
+if(a1==null){s=1
+break}a1=A.aZ(a1,!1)
+f=k.b
+a1.kS(A.ajs(!(f==="faculty"||f==="faculty coordinator")?B.iQ:B.uf))
 A.dS(B.aG,new A.aLL(),t.P)
 s=11
 break
 case 12:if(n.c==null){s=1
 break}n.G(new A.aLM(n))
-a0=n.c.aa(t.J).f
+a1=n.c.aa(t.J).f
 f=n.c
 f.toString
-a0.hL(A.mZ(null,null,null,A.h(f).fy,B.ci,B.w,null,B.a9N,null,B.cA,null,null,null,B.tM,null,null,null,new A.cz(A.an(8),B.u),null,null))
+a1.hL(A.mZ(null,null,null,A.h(f).fy,B.ci,B.w,null,B.a9N,null,B.cA,null,null,null,B.tM,null,null,null,new A.cz(A.an(8),B.u),null,null))
 case 11:case 1:return A.r(q,r)
 case 2:return A.q(o.at(-1),r)}})
 return A.t($async$lQ,r)},

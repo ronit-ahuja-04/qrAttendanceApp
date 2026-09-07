@@ -60,7 +60,7 @@ async function main() {
       
       if (user.role === 'student') {
         newPassword = `${firstLastPascal}@${user.rollNo}`;
-      } else if (user.role === 'faculty' || user.role === 'admin') {
+      } else if (user.role === 'faculty' || user.role === 'faculty coordinator' || user.role === 'admin') {
         newPassword = `${firstLastPascal}@vesit`;
       } else {
         continue;

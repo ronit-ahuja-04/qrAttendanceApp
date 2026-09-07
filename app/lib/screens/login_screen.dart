@@ -111,7 +111,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (user != null) {
-      if (user.role != _role) {
+      bool isCoordinator = _role == 'faculty' && user.role == 'faculty coordinator';
+      if (user.role != _role && !isCoordinator) {
         if (!mounted) return;
         setState(() => _isLoading = false);
         String errorMessage = 'Role mismatch: This is a ${user.role} account. Please select ${user.role.toUpperCase()} above!';
@@ -170,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         FadeBlurPageRoute(
-          page: user.role == 'student'
+          page: !user.isFaculty
               ? const StudentMainLayout()
               : const FacultyMainLayout(),
         ),

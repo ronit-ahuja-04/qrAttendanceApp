@@ -430,7 +430,7 @@ app.post('/login', loginLimiter, (req, res) => {
       row.branch = 'INFT'; // Hardcode branch for now as per user request
       row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
 
-      if (row.role === 'faculty') {
+      if (row.role === 'faculty' || row.role === 'faculty coordinator') {
         db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
           if (err) {
             console.error("Error fetching scopes:", err);
