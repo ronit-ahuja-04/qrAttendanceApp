@@ -233,50 +233,70 @@ class _DigitalIdCard extends StatelessWidget {
                               user?.rollNo ?? '4500054',
                               style: context.textStyles.vesitLabelBold.copyWith(color: context.colors.vesitPrimary, fontSize: 15, letterSpacing: 1.5),
                             ),
-                            if (user?.branch != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'BRANCH',
-                                style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
-                              ),
-                              Text(
-                                user!.branch!.toUpperCase(),
-                                style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
-                              ),
-                            ],
-                            if (user?.division != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'DIVISION',
-                                style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
-                              ),
-                              Text(
-                                user!.division!.toUpperCase(),
-                                style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
-                              ),
-                            ],
-                            if (user?.coreBatch != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'CORE BATCH',
-                                style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
-                              ),
-                              Text(
-                                user!.coreBatch!.toUpperCase(),
-                                style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
-                              ),
-                            ],
-                            if (user?.electiveBatch != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'ELECTIVE BATCH',
-                                style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
-                              ),
-                              Text(
-                                user!.electiveBatch!.toUpperCase(),
-                                style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
-                              ),
-                            ],
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (user?.branch != null) ...[
+                                        Text(
+                                          'BRANCH',
+                                          style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
+                                        ),
+                                        Text(
+                                          user!.branch!.toUpperCase(),
+                                          style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      if (user?.division != null) ...[
+                                        Text(
+                                          'DIVISION',
+                                          style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
+                                        ),
+                                        Text(
+                                          user!.division!.toUpperCase(),
+                                          style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (user?.coreBatch != null) ...[
+                                        Text(
+                                          'CORE BATCH',
+                                          style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
+                                        ),
+                                        Text(
+                                          user!.coreBatch!.toUpperCase(),
+                                          style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      if (user?.electiveBatch != null) ...[
+                                        Text(
+                                          'ELECTIVE BATCH',
+                                          style: context.textStyles.vesitLabelSm.copyWith(color: Colors.grey.shade600, fontSize: 10),
+                                        ),
+                                        Text(
+                                          user!.electiveBatch!.toUpperCase(),
+                                          style: context.textStyles.vesitBodySm.copyWith(color: context.colors.onSurface),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Divider(color: Colors.grey.shade300, thickness: 1, height: 1),
                           ],
                         ),
                       ),
