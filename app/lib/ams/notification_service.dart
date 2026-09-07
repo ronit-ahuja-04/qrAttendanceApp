@@ -277,6 +277,7 @@ class NotificationService {
     try {
       final isWebDesktop = kIsWeb && MediaQuery.of(context).size.width > 800;
       
+      ScaffoldMessenger.of(context).clearSnackBars(); // Prevent endless queueing
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
