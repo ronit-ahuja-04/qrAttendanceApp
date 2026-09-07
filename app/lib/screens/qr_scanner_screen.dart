@@ -133,32 +133,35 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               borderRadius: BorderRadius.circular(16),
                               child: Stack(
                                 children: [
-                                  MobileScanner(
-                                    controller: _scannerController,
-                                    onDetect: (capture) {
-                                      final List<Barcode> barcodes = capture.barcodes;
-                                      for (final barcode in barcodes) {
-                                        // Auto-zoom logic based on barcode bounding box
-                                        if (barcode.corners.length == 4) {
-                                          final dx = barcode.corners[0].dx - barcode.corners[1].dx;
-                                          final dy = barcode.corners[0].dy - barcode.corners[1].dy;
-                                          final width = math.sqrt(dx * dx + dy * dy);
-                                          
-                                          // If barcode is small on screen, zoom in gradually
-                                          if (width > 0 && width < 120 && _zoomScale < 1.0) {
-                                            _zoomScale += 0.05;
-                                            if (_zoomScale > 1.0) _zoomScale = 1.0;
-                                            _scannerController.setZoomScale(_zoomScale);
-                                            if (kIsWeb) setWebCameraZoom(_zoomScale);
+                                  Transform.scale(
+                                    scale: 1.0 + (_zoomScale * 2.0),
+                                    child: MobileScanner(
+                                      controller: _scannerController,
+                                      onDetect: (capture) {
+                                        final List<Barcode> barcodes = capture.barcodes;
+                                        for (final barcode in barcodes) {
+                                          // Auto-zoom logic based on barcode bounding box
+                                          if (barcode.corners.length == 4) {
+                                            final dx = barcode.corners[0].dx - barcode.corners[1].dx;
+                                            final dy = barcode.corners[0].dy - barcode.corners[1].dy;
+                                            final width = math.sqrt(dx * dx + dy * dy);
+                                            
+                                            // If barcode is small on screen, zoom in gradually
+                                            if (width > 0 && width < 120 && _zoomScale < 1.0) {
+                                              _zoomScale += 0.05;
+                                              if (_zoomScale > 1.0) _zoomScale = 1.0;
+                                              _scannerController.setZoomScale(_zoomScale);
+                                              if (kIsWeb) setWebCameraZoom(_zoomScale);
+                                            }
+                                          }
+
+                                          if (barcode.rawValue != null) {
+                                            _processScan(barcode.rawValue!);
+                                            break; // Process only the first one
                                           }
                                         }
-
-                                        if (barcode.rawValue != null) {
-                                          _processScan(barcode.rawValue!);
-                                          break; // Process only the first one
-                                        }
-                                      }
-                                    },
+                                      },
+                                    ),
                                   ),
                                   if (_submitting)
                                     Container(
