@@ -53,7 +53,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
 
       if (!isToday && !isYesterday) continue;
 
-      final subject = session['subject'] ?? '';
+      final rawSubject = session['subject'] ?? '';
+      final subject = AmsGlobals.formatSubjectName(rawSubject);
       final rawFacultyName = session['facultyName'] ?? '';
       final facultyName = AmsGlobals.formatFacultyName(rawFacultyName);
       final venue = session['venue'] ?? '';
@@ -691,9 +692,9 @@ class _SubjectHealthDeckState extends State<_SubjectHealthDeck> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  (s['courseCode'] ?? '')
+                                  AmsGlobals.formatSubjectName((s['courseCode'] ?? '')
                                       .replaceAll(' - Lab', '')
-                                      .replaceAll(' - Lecture', ''),
+                                      .replaceAll(' - Lecture', '')),
                                   style: context.textStyles.vesitHeadlineSm
                                       .copyWith(
                                           color: Colors.white,

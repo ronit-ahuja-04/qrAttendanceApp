@@ -142,4 +142,30 @@ class AmsGlobals {
       return p[0].toUpperCase() + p.substring(1).toLowerCase();
     }).join(' ');
   }
+
+  /// Formats subject names to Title Case and removes specific extraneous tags like (DMBI)
+  static String formatSubjectName(String name) {
+    if (name.isEmpty) return name;
+    
+    // Remove "(DMBI)" case-insensitively and trim
+    String cleaned = name.replaceAll(RegExp(r'\s*\(\s*DMBI\s*\)', caseSensitive: false), '').trim();
+    
+    // Title Case implementation
+    final words = cleaned.split(' ');
+    final lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
+    
+    return words.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final word = entry.value;
+      if (word.isEmpty) return '';
+      
+      final lowerWord = word.toLowerCase();
+      // Lowercase specific words unless it's the first or last word
+      if (idx > 0 && idx < words.length - 1 && lowerCaseWords.contains(lowerWord)) {
+        return lowerWord;
+      }
+      
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
 }

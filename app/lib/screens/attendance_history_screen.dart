@@ -100,7 +100,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
 
       final entry = _AttendanceEntry(
-        subject: h['subject'] ?? 'Unknown',
+        subject: AmsGlobals.formatSubjectName(h['subject'] ?? 'Unknown'),
         time: h['time'] ?? '--',
         location: h['location'] ?? 'Campus',
         status: h['status'] == 'present'

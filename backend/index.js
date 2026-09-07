@@ -17,6 +17,24 @@ const app = express();
 
 app.use(helmet());
 app.use(apiLimiter);
+
+// Helper to format subject names
+function formatSubjectName(name) {
+  if (!name) return name;
+  let cleaned = name.replace(/\s*\(\s*DMBI\s*\)/gi, '').trim();
+  const words = cleaned.split(' ');
+  const lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
+  
+  return words.map((word, idx) => {
+    if (!word) return '';
+    const lowerWord = word.toLowerCase();
+    if (idx > 0 && idx < words.length - 1 && lowerCaseWords.includes(lowerWord)) {
+      return lowerWord;
+    }
+    return word.charAt(0).toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:56086',
@@ -213,7 +231,7 @@ cron.schedule('59 23 * * *', () => {
         
         const now = new Date().toISOString();
         const facTitle = 'Proxy Auto-Approved (Timeout)';
-        const facBody = `The pending proxy session for ${session.courseCode} was auto-approved because it was not resolved by midnight.`;
+        const facBody = `The pending proxy session for ${formatSubjectName(session.courseCode)} was auto-approved because it was not resolved by midnight.`;
         
         // Notify original faculty
         db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -233,7 +251,7 @@ cron.schedule('59 23 * * *', () => {
           db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [session.id, 'present'], (err, students) => {
             if (students && students.length > 0) {
               const sTitle = 'Attendance Verified (Auto)';
-              const sBody = `Attendance marked for lecture ${session.courseCode} of faculty ${facName}.`;
+              const sBody = `Attendance marked for lecture ${formatSubjectName(session.courseCode)} of faculty ${facName}.`;
               const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
               students.forEach(s => {
                 notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
@@ -1170,8 +1188,8 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
             
             const title = isPending ? 'Attendance On Hold' : 'Attendance Verified';
             let body = isPending 
-              ? `Your attendance for ${session.courseCode} is on hold pending original faculty approval.`
-              : `Marked as ${statusText} for ${session.courseCode} at ${timeString}`;
+              ? `Your attendance for ${formatSubjectName(session.courseCode)} is on hold pending original faculty approval.`
+              : `Marked as ${statusText} for ${formatSubjectName(session.courseCode)} at ${timeString}`;
               
             if (isLab && session.proxyFacultyId && !isPending) {
                body = `Attendance for Lab recorded for student. Status of attendance record for the specified lab batch faculty ${facName}`;
@@ -1195,7 +1213,7 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
              db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
                  const proxyName = row ? row.name : session.proxyFacultyId;
                  const title = 'Proxy Session Completed (Auto-Approved)';
-                 const body = `${proxyName} has submitted attendance for the proxy session of your ${session.courseCode} at ${session.batchTarget} and it was auto-approved${isSeminar ? ' (Seminar)' : ''}.`;
+                 const body = `${proxyName} has submitted attendance for the proxy session of your ${formatSubjectName(session.courseCode)} at ${session.batchTarget} and it was auto-approved${isSeminar ? ' (Seminar)' : ''}.`;
                  db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                    [uuidv4(), session.facultyId, title, body, 'Auto-Approved', 'successContainer', 'onSuccessContainer', proxyName, 'check_circle', now]);
                  sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
@@ -1208,7 +1226,7 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
              db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
                  const proxyName = row ? row.name : session.proxyFacultyId;
                  const title = 'Proxy Approval Required';
-                 const body = `${proxyName} has submitted attendance for your ${session.courseCode} class. Please review and approve.`;
+                 const body = `${proxyName} has submitted attendance for your ${formatSubjectName(session.courseCode)} class. Please review and approve.`;
                  db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                    [uuidv4(), session.facultyId, title, body, 'Action Required', 'tertiaryContainer', 'onTertiaryContainer', proxyName, 'pending_actions', new Date().toISOString()]);
                  sendPushNotification(session.facultyId, title, body, { type: 'PROXY_APPROVAL_REQUIRED' });
@@ -1218,7 +1236,7 @@ app.post('/api/sessions/:id/attendance/finalize', (req, res) => {
              // Regular submission notification to the submitter
              const submitterId = session.proxyFacultyId || session.facultyId;
              const submitterTitle = 'Attendance Submitted';
-             const submitterBody = `Attendance for ${session.courseCode} has been successfully submitted.`;
+             const submitterBody = `Attendance for ${formatSubjectName(session.courseCode)} has been successfully submitted.`;
              db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
              sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
