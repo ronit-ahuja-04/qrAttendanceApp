@@ -1721,26 +1721,32 @@ app.get('/api/timetable/student/:studentId', (req, res) => {
     const params = [];
 
     if (division) {
-      // Matches: "D15A - All"
       conditions.push(`t.batchTarget = ?`);
       params.push(`${division} - All`);
 
       if (coreBatch) {
-        // Matches: "D15A - Batch A"
         conditions.push(`t.batchTarget = ?`);
         params.push(`${division} - ${coreBatch}`);
       }
     }
 
     if (electiveSubject) {
-      // Matches: "TE - Soft Computing (All)" or "TE - ADMT (All)"
       conditions.push(`t.batchTarget = ?`);
       params.push(`TE - ${electiveSubject} (All)`);
-
       if (electiveBatch) {
-        // Matches: "TE - Soft Computing (Batch A)"
         conditions.push(`t.batchTarget = ?`);
         params.push(`TE - ${electiveSubject} (${electiveBatch})`);
+      }
+      
+      // Handle ADMT aliases (e.g. if DB has 'Advanced Database Management Technologies' but timetable has 'ADMT')
+      if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+        const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`TE - ${alias} (All)`);
+        if (electiveBatch) {
+          conditions.push(`t.batchTarget = ?`);
+          params.push(`TE - ${alias} (${electiveBatch})`);
+        }
       }
     }
 
@@ -1868,13 +1874,19 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
         if (err || !student) return res.json([]);
         
         const { division, coreBatch, electiveSubject, electiveBatch } = student;
-        const validTargets = [
+        let validTargets = [
           `${division} - All`,
           `${division} - ${coreBatch}`,
           `${division} - ${electiveBatch} (${electiveSubject})`,
           `TE - ${electiveSubject} (All)`,
           `TE - ${electiveSubject} (${electiveBatch})`
         ];
+        
+        if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+          const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+          validTargets.push(`TE - ${alias} (All)`);
+          validTargets.push(`TE - ${alias} (${electiveBatch})`);
+        }
         
         const tPlaceholders = validTargets.map(() => '?').join(',');
         const tQuery = `SELECT * FROM timetable_slots WHERE batchTarget IN (${tPlaceholders})`;
@@ -1938,13 +1950,19 @@ function notifyTimetableUpdate(facultyId, subject, batchTarget, day, slotId) {
       if (err) return;
       students.forEach(student => {
         const { id: studentId, division, coreBatch, electiveSubject, electiveBatch } = student;
-        const validTargets = [
+        let validTargets = [
           `${division} - All`,
           `${division} - ${coreBatch}`,
           `${division} - ${electiveBatch} (${electiveSubject})`,
           `TE - ${electiveSubject} (All)`,
           `TE - ${electiveSubject} (${electiveBatch})`
         ];
+        
+        if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+          const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+          validTargets.push(`TE - ${alias} (All)`);
+          validTargets.push(`TE - ${alias} (${electiveBatch})`);
+        }
         if (validTargets.includes(batchTarget)) {
           const notifId = uuidv4();
           const title = `Timetable updated for ${subject}`;
