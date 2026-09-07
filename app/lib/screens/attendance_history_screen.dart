@@ -309,9 +309,7 @@ class _DateBanner extends StatelessWidget {
       2: 'Tuesday',
       3: 'Wednesday',
       4: 'Thursday',
-      5: 'Friday',
-      6: 'Saturday',
-      7: 'Sunday'
+      5: 'Friday'
     };
     final Map<int, String> months = {
       1: 'Jan',

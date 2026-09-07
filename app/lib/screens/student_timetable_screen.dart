@@ -17,7 +17,7 @@ class StudentTimetableScreen extends StatefulWidget {
 class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _slots = [];
-  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   @override
   void initState() {

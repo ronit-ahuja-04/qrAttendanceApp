@@ -28,7 +28,7 @@ class FacultyTimetableManagerScreen extends StatefulWidget {
 }
 
 class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerScreen> {
-  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   void _showAddSlotModal(String initialDay) {
     showModalBottomSheet(

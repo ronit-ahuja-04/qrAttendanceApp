@@ -892,11 +892,12 @@ class _UpcomingSessionsList extends StatelessWidget {
                         bool isYesterdaySlot = false;
                         final sDay = session['day'] as String?;
                         if (sDay != null) {
-                          final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                          final todayIndex = now.weekday - 1;
-                          final idx = dayNamesList.indexOf(sDay);
+                          final dayNamesList = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                          final todayIndex = now.weekday > 5 ? 4 : now.weekday - 1;
+                          final normalizedDay = sDay == 'Sat' || sDay == 'Sun' ? 'Fri' : sDay;
+                          final idx = dayNamesList.indexOf(normalizedDay);
                           if (idx >= 0) {
-                            if (todayIndex == 0 && idx == 6) isYesterdaySlot = true;
+                            if (todayIndex == 0 && idx == 4) isYesterdaySlot = true; // Mon -> Fri
                             else if (idx == todayIndex - 1) isYesterdaySlot = true;
                           }
                         }
@@ -1029,14 +1030,13 @@ class _UpcomingSessionsList extends StatelessWidget {
                         'Tue',
                         'Wed',
                         'Thu',
-                        'Fri',
-                        'Sat',
-                        'Sun'
+                        'Fri'
                       ];
-                      final todayIndex = now.weekday - 1;
-                      final idx = dayNamesList.indexOf(sDay);
+                      final todayIndex = now.weekday > 5 ? 4 : now.weekday - 1;
+                      final normalizedDay = sDay == 'Sat' || sDay == 'Sun' ? 'Fri' : sDay;
+                      final idx = dayNamesList.indexOf(normalizedDay);
                       if (idx >= 0) {
-                        if (todayIndex == 0 && idx == 6)
+                        if (todayIndex == 0 && idx == 4) // Mon -> Fri
                           isYesterday = true;
                         else if (idx == todayIndex - 1) isYesterday = true;
                       }

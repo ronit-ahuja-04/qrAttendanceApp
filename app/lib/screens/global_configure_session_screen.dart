@@ -303,7 +303,8 @@ class _GlobalConfigureSessionScreenState
     if (_proxyDivision.isEmpty && _year != 'TE (Elective)') return [];
     
     final now = DateTime.now();
-    final currentDay = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][now.weekday - 1];
+    final dIdx = now.weekday > 5 ? 4 : now.weekday - 1;
+    final currentDay = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][dIdx];
     final currentMinutes = now.hour * 60 + now.minute;
     
     return _allSlots.where((slot) {

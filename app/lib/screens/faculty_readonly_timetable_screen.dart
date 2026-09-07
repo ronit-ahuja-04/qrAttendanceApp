@@ -27,7 +27,7 @@ class FacultyReadonlyTimetableScreen extends StatefulWidget {
 }
 
 class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetableScreen> {
-  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   bool _isLoading = true;
   List<Map<String, dynamic>> _slots = [];
 

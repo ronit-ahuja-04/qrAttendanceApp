@@ -2209,8 +2209,10 @@ function handleSmartSeminarAttendance(req, res, session, userId, method) {
     // Parse times
     const startDt = new Date(startTime);
     const endDt = new Date(endTime);
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayStr = dayNames[startDt.getDay()];
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    // Fallback to Friday if weekend (since Sat/Sun removed)
+    const dIdx = startDt.getDay() === 0 || startDt.getDay() === 6 ? 4 : startDt.getDay() - 1;
+    const todayStr = dayNames[dIdx];
 
     const startTotalMins = startDt.getHours() * 60 + startDt.getMinutes();
     const endTotalMins = endDt.getHours() * 60 + endDt.getMinutes();

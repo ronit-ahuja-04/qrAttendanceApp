@@ -37,7 +37,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   List<Map<String, dynamic>> get _formattedUpcomingSessions {
     final now = _now;
     final nowEpoch = now.millisecondsSinceEpoch;
-    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     final todayIndex = now.weekday - 1;
     final sessions = <Map<String, dynamic>>[];
 
@@ -173,8 +173,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final user = AmsGlobals.loggedInUser;
     if (user != null) {
       final now = DateTime.now();
-      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      final dayStr = dayNames[now.weekday - 1];
+      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      // Fallback to Friday if weekend
+      final dIdx = now.weekday > 5 ? 4 : now.weekday - 1;
+      final dayStr = dayNames[dIdx];
       final slots =
           await AmsGlobals.sessionService.getStudentTimetableToday(user.id, dayStr);
       if (mounted) setState(() { 
