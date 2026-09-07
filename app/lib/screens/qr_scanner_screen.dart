@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -167,28 +168,30 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Icon(Icons.zoom_out, color: context.colors.primary, size: 20),
-                              Expanded(
-                                child: Slider(
-                                  value: _zoomScale,
-                                  min: 0.0,
-                                  max: 1.0,
-                                  activeColor: context.colors.primary,
-                                  inactiveColor: context.colors.outlineVariant,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _zoomScale = value;
-                                    });
-                                    _scannerController.setZoomScale(value);
-                                  },
+                          if (!kIsWeb) ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Icon(Icons.zoom_out, color: context.colors.primary, size: 20),
+                                Expanded(
+                                  child: Slider(
+                                    value: _zoomScale,
+                                    min: 0.0,
+                                    max: 1.0,
+                                    activeColor: context.colors.primary,
+                                    inactiveColor: context.colors.outlineVariant,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _zoomScale = value;
+                                      });
+                                      _scannerController.setZoomScale(value);
+                                    },
+                                  ),
                                 ),
-                              ),
-                              Icon(Icons.zoom_in, color: context.colors.primary, size: 20),
-                            ],
-                          ),
+                                Icon(Icons.zoom_in, color: context.colors.primary, size: 20),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -201,7 +204,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  'Point camera and zoom if needed',
+                                  kIsWeb 
+                                      ? 'Point your camera at the instructor\'s screen'
+                                      : 'Point camera and zoom if needed',
                                   style: context.textStyles.labelMd.copyWith(
                                     color: context.colors.primary,
                                     fontWeight: FontWeight.w600,
