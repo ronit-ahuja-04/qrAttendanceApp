@@ -1377,9 +1377,9 @@ class _RecentSessionsList extends StatelessWidget {
 
     final currentUserId = AmsGlobals.loggedInUser?.id;
     final recentSessions = sessions.where((s) {
-      if (s.status != SessionStatus.closed && s.status != SessionStatus.active && s.status != SessionStatus.completed) return false;
+      if (s.status != SessionStatus.closed && s.status != SessionStatus.completed) return false;
       // Hide from proxy's view AFTER submission, unless they get the credit (facultyId becomes them)
-      if (s.proxyFacultyId == currentUserId && s.facultyId != currentUserId && s.status != SessionStatus.active) return false;
+      if (s.proxyFacultyId == currentUserId && s.facultyId != currentUserId) return false;
       return true;
     }).toList();
     recentSessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));

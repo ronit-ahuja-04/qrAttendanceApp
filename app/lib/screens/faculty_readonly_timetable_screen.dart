@@ -68,6 +68,7 @@ class _FacultyReadonlyTimetableScreenState extends State<FacultyReadonlyTimetabl
           automaticallyImplyLeading: false,
           title: Text('My Timetable', style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary)),
           bottom: TabBar(
+            tabAlignment: TabAlignment.center,
             isScrollable: true,
             labelColor: context.colors.vesitPrimary,
             unselectedLabelColor: Colors.grey.shade500,

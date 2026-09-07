@@ -229,6 +229,7 @@ class _FacultyTimetableManagerScreenState extends State<FacultyTimetableManagerS
           ),
           title: Text('Timetable Manager', style: context.textStyles.vesitHeadlineSm.copyWith(color: context.colors.vesitPrimary)),
           bottom: TabBar(
+            tabAlignment: TabAlignment.center,
             isScrollable: true,
             labelColor: context.colors.vesitPrimary,
             unselectedLabelColor: Colors.grey.shade500,
@@ -467,12 +468,13 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
     
     if (subjectScopes.isNotEmpty) {
-      _types = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet().toList()..sort();
-      if (!_types.contains(_type)) _type = _types.isNotEmpty ? _types.first : 'Lecture';
+      final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture');
+      _types = {'Lecture', 'Practical', 'Tutorial', ...scopeTypes}.toList()..sort();
+      if (!_types.contains(_type)) _type = 'Lecture';
       
       _updateBatchesForType();
     } else {
-      _types = ['Lecture'];
+      _types = ['Lecture', 'Practical', 'Tutorial'];
       _type = 'Lecture';
       _batches = ['Unknown Batch'];
       _batch = 'Unknown Batch';
