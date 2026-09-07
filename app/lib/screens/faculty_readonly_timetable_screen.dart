@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../ams/globals.dart';
 import '../ams/api_services.dart';
+import '../ams/notification_service.dart';
 
 String _formatTimeString(String timeStr) {
   if (timeStr == 'N/A' || timeStr.isEmpty) return timeStr;
@@ -19,8 +21,7 @@ String _formatTimeString(String timeStr) {
   }
 }
 
-import 'dart:async';
-import '../ams/notification_service.dart';
+
 
 class FacultyReadonlyTimetableScreen extends StatefulWidget {
   final int? initialDay;

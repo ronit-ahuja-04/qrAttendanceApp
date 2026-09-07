@@ -239,6 +239,7 @@ class _StudentSlotCard extends StatelessWidget {
                 ],
               ),
             ),
+            ),
           ),
         ),
       ),
