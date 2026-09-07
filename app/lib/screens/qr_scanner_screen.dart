@@ -15,6 +15,8 @@ import 'student_not_enrolled_screen.dart';
 import 'student_already_marked_screen.dart';
 import '../widgets/vesit_toast.dart';
 
+import '../utils/web_zoom.dart';
+
 /// "Verify Attendance" screen — reached from the dashboard's
 /// "Mark Your Attendance" button. Lets the student pick the subject the
 /// QR was broadcast for, key in the 6-digit code, then submit.
@@ -147,6 +149,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                             _zoomScale += 0.05;
                                             if (_zoomScale > 1.0) _zoomScale = 1.0;
                                             _scannerController.setZoomScale(_zoomScale);
+                                            if (kIsWeb) setWebCameraZoom(_zoomScale);
                                           }
                                         }
 
@@ -168,30 +171,29 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               ),
                             ),
                           ),
-                          if (!kIsWeb) ...[
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Icon(Icons.zoom_out, color: context.colors.primary, size: 20),
-                                Expanded(
-                                  child: Slider(
-                                    value: _zoomScale,
-                                    min: 0.0,
-                                    max: 1.0,
-                                    activeColor: context.colors.primary,
-                                    inactiveColor: context.colors.outlineVariant,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _zoomScale = value;
-                                      });
-                                      _scannerController.setZoomScale(value);
-                                    },
-                                  ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(Icons.zoom_out, color: context.colors.primary, size: 20),
+                              Expanded(
+                                child: Slider(
+                                  value: _zoomScale,
+                                  min: 0.0,
+                                  max: 1.0,
+                                  activeColor: context.colors.primary,
+                                  inactiveColor: context.colors.outlineVariant,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _zoomScale = value;
+                                    });
+                                    _scannerController.setZoomScale(value);
+                                    if (kIsWeb) setWebCameraZoom(value);
+                                  },
                                 ),
-                                Icon(Icons.zoom_in, color: context.colors.primary, size: 20),
-                              ],
-                            ),
-                          ],
+                              ),
+                              Icon(Icons.zoom_in, color: context.colors.primary, size: 20),
+                            ],
+                          ),
                           const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -204,9 +206,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  kIsWeb 
-                                      ? 'Point your camera at the instructor\'s screen'
-                                      : 'Point camera and zoom if needed',
+                                  'Point camera and zoom if needed',
                                   style: context.textStyles.labelMd.copyWith(
                                     color: context.colors.primary,
                                     fontWeight: FontWeight.w600,
