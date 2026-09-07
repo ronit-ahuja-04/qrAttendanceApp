@@ -420,6 +420,8 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   String _batch = 'Unknown Batch';
   
   final _venueController = TextEditingController();
+  final _subjectController = TextEditingController();
+  final _batchController = TextEditingController();
 
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 30);
@@ -429,14 +431,18 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     super.initState();
     _day = widget.initialDay;
     _initScopes();
+    
+    _subjectController.text = _subject;
+    _batchController.text = _batch;
 
     if (widget.existingSlot != null) {
       final slot = widget.existingSlot!;
       _subject = slot['subject'] ?? _subjects.first;
-      if (!_subjects.contains(_subject)) _subject = _subjects.first;
+      _subjectController.text = _subject;
       
       _type = slot['type'] ?? 'Lecture';
       _batch = slot['batchTarget'] ?? 'Unknown Batch';
+      _batchController.text = _batch;
 
       _updateDependentDropdowns();
       
@@ -525,6 +531,8 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   @override
   void dispose() {
     _venueController.dispose();
+    _subjectController.dispose();
+    _batchController.dispose();
     super.dispose();
   }
 
@@ -664,18 +672,10 @@ class _AddSlotModalState extends State<_AddSlotModal> {
               ),
               const SizedBox(height: 16),
 
-              VesitDropdown<String>(
+              VesitTextField(
                 label: 'Subject',
                 icon: Icons.book_outlined,
-                value: _subject,
-                items: _subjects,
-                itemLabel: (v) => v,
-                onChanged: (v) {
-                  setState(() {
-                    _subject = v!;
-                    _updateDependentDropdowns();
-                  });
-                },
+                controller: _subjectController,
               ),
               const SizedBox(height: 16),
               VesitDropdown<String>(
@@ -695,15 +695,10 @@ class _AddSlotModalState extends State<_AddSlotModal> {
               ),
               if (_type != 'Lecture') ...[
                 const SizedBox(height: 16),
-                VesitDropdown<String>(
+                VesitTextField(
                   label: 'Batch',
                   icon: Icons.people,
-                  value: _batch,
-                  items: _batches,
-                  itemLabel: (v) => v,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _batch = val);
-                  },
+                  controller: _batchController,
                 ),
               ],
               

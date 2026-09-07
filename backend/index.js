@@ -747,9 +747,7 @@ app.post('/sessions', (req, res) => {
       const todayEnd = new Date();
       todayEnd.setHours(23,59,59,999);
 
-      const checkQuery = isProduction
-        ? `SELECT * FROM sessions WHERE slotId = $1 AND createdAt >= $2 AND createdAt <= $3 LIMIT 1`
-        : `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
+      const checkQuery = `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
         
       db.get(checkQuery, [slotId, todayStart.toISOString(), todayEnd.toISOString()], (err, existingSession) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -2029,9 +2027,7 @@ app.get('/timetable/:facultyId', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
 
     // Fetch today's sessions for this faculty to prevent duplicate QR generation
-    const checkQuery = isProduction
-      ? `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = $1 AND createdAt >= $2 AND createdAt <= $3`
-      : `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
+    const checkQuery = `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
 
     db.all(checkQuery, [facultyId, todayStart, todayEnd], (err, sessions) => {
       if (err) return res.status(500).json({ error: err.message });

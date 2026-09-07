@@ -27,11 +27,15 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
   String _subject = '';
   String _sessionType = '';
   final _roomController = TextEditingController(text: 'Lab 402');
+  final _subjectController = TextEditingController();
+  final _batchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _initScopes();
+    _subjectController.text = _subject;
+    _batchController.text = _batch;
   }
 
   void _initScopes() {
@@ -83,13 +87,18 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
 
   @override
   void dispose() {
+    _subjectController.dispose();
+    _batchController.dispose();
     _roomController.dispose();
     super.dispose();
   }
 
   void _generateQr() {
+    final subject = _subjectController.text.trim();
+    final batch = _batchController.text.trim();
+
     // UI Validation - 2 sec top snackbar
-    if (_batch.contains('ADMT') && !_subject.toLowerCase().contains('admt') && !_subject.toLowerCase().contains('database')) {
+    if (batch.contains('ADMT') && !subject.toLowerCase().contains('admt') && !subject.toLowerCase().contains('database')) {
       VesitToast.show(context: context, title: 'Mismatch: Target is ADMT but Subject is not.', type: ToastType.info);
       return;
     }
@@ -105,9 +114,9 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => FacultyAttendanceQrGeneratorScreen(
-          subjectTitle: '$_subject - ${_sessionType.contains("Lab") ? "Lab" : "Lecture"}',
-          sessionSubtitle: '${_roomController.text} • $timingShort • Target: $_batch',
-          batchTarget: _batch,
+          subjectTitle: '$subject - ${_sessionType.contains("Lab") ? "Lab" : "Lecture"}',
+          sessionSubtitle: '${_roomController.text} • $timingShort • Target: $batch',
+          batchTarget: batch,
         ),
       ),
     );
@@ -130,18 +139,10 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        VesitDropdown<String>(
+                        VesitTextField(
                           label: 'Subject',
                           icon: Icons.book_outlined,
-                          value: _subject,
-                          items: _subjects,
-                          itemLabel: (v) => v,
-                          onChanged: (v) {
-                            setState(() {
-                              _subject = v!;
-                              _updateDependentDropdowns();
-                            });
-                          },
+                          controller: _subjectController,
                         ),
                         const SizedBox(height: 20),
                         VesitDropdown<String>(
@@ -161,17 +162,10 @@ class _ConfigureSessionScreenState extends State<ConfigureSessionScreen> {
                         ),
                         if (!_sessionType.toLowerCase().contains('lecture')) ...[
                           const SizedBox(height: 20),
-                          VesitDropdown<String>(
+                          VesitTextField(
                             label: 'Batch',
                             icon: Icons.people_outline,
-                            value: _batch,
-                            items: _batches,
-                            itemLabel: (v) => v,
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _batch = val);
-                              }
-                            },
+                            controller: _batchController,
                           ),
                         ],
                         const SizedBox(height: 20),
