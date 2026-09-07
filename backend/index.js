@@ -421,7 +421,7 @@ app.get('/profile-images/:id', (req, res) => {
 app.post('/login', loginLimiter, (req, res) => {
   const { email, password, deviceId } = req.body;
   console.log('Login attempt:', email, password);
-  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, deviceId FROM users WHERE LOWER(email) = LOWER(?) AND password = ?`, [email, password], (err, row) => {
+  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, coreBatch, electiveSubject, electiveBatch, deviceId FROM users WHERE LOWER(email) = LOWER(?) AND password = ?`, [email, password], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -1687,31 +1687,55 @@ app.get('/api/timetable/student/:studentId', (req, res) => {
   const { studentId } = req.params;
   let { day } = req.query; // e.g., 'Mon', 'Tue'
 
-  // Make day optional. If provided, filter by day.
-
   db.get('SELECT division, coreBatch, electiveSubject, electiveBatch FROM users WHERE id = ?', [studentId], (err, student) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
     const { division, coreBatch, electiveSubject, electiveBatch } = student;
 
-    const validTargets = [
-      `${division} - All`,
-      `${division} - ${coreBatch}`,
-      `${division} - ${electiveBatch} (${electiveSubject})`,
-      `TE - ${electiveSubject} (All)`,
-      `TE - ${electiveSubject} (${electiveBatch})`
-    ];
+    // Build a WHERE clause that matches any slot this student should see:
+    // 1. Division-level lecture (e.g. "D15A - All")
+    // 2. Division + coreBatch specific lab (e.g. "D15A - Batch A")
+    // 3. Elective lecture (e.g. "TE - Soft Computing (All)" or "TE - ADMT (All)")
+    // 4. Elective lab (e.g. "TE - Soft Computing (Batch A)" or "TE - ADMT (Batch A)")
+    // 5. Cross-division elective (e.g. "TE - ADMT (Batch A)" style)
+    const conditions = [];
+    const params = [];
 
-    const placeholders = validTargets.map(() => '?').join(',');
+    if (division) {
+      // Matches: "D15A - All"
+      conditions.push(`t.batchTarget = ?`);
+      params.push(`${division} - All`);
+
+      if (coreBatch) {
+        // Matches: "D15A - Batch A"
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`${division} - ${coreBatch}`);
+      }
+    }
+
+    if (electiveSubject) {
+      // Matches: "TE - Soft Computing (All)" or "TE - ADMT (All)"
+      conditions.push(`t.batchTarget = ?`);
+      params.push(`TE - ${electiveSubject} (All)`);
+
+      if (electiveBatch) {
+        // Matches: "TE - Soft Computing (Batch A)"
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`TE - ${electiveSubject} (${electiveBatch})`);
+      }
+    }
+
+    if (conditions.length === 0) {
+      return res.json([]);
+    }
+
     let query = `
       SELECT t.*, u.name as facultyName, u.email as facultyEmail
       FROM timetable_slots t
       JOIN users u ON t.facultyId = u.id
-      WHERE t.batchTarget IN (${placeholders})
+      WHERE (${conditions.join(' OR ')})
     `;
-
-    let params = [...validTargets];
 
     if (day) {
       query += ` AND t.day = ?`;

@@ -515,14 +515,26 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     
     // Fallback: If not hardcoded, use their existing scopes from the backend
     final backendScopes = AmsGlobals.loggedInUser?.scopes ?? [];
-    if (backendScopes.isNotEmpty) return backendScopes;
+    if (backendScopes.isNotEmpty) {
+      return backendScopes.map((s) {
+        String bt = s['batchTarget']?.toString() ?? '';
+        if (bt == 'All') bt = 'D15A - All';
+        if (bt == 'Batch A') bt = 'D15A - Batch A';
+        if (bt == 'Batch B') bt = 'D15A - Batch B';
+        if (bt == 'Batch C') bt = 'D15A - Batch C';
+        return {
+          ...s,
+          'batchTarget': bt,
+        };
+      }).toList();
+    }
     
     // Generic fallback for unknown faculties
     return [
-      {'subject': 'Generic Subject', 'type': 'Lecture', 'batchTarget': 'All'},
-      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch A'},
-      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch B'},
-      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      {'subject': 'Generic Subject', 'type': 'Lecture', 'batchTarget': 'D15A - All'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'D15A - Batch A'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'D15A - Batch B'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'D15A - Batch C'},
     ];
   }
 
@@ -563,15 +575,15 @@ class _AddSlotModalState extends State<_AddSlotModal> {
       _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? '').toSet().toList()..sort();
     } else {
       if (_type.toLowerCase() == 'lecture') {
-        _batches = ['All'];
+        _batches = ['D15A - All'];
       } else {
-        _batches = ['Batch A', 'Batch B', 'Batch C'];
+        _batches = ['D15A - Batch A', 'D15A - Batch B', 'D15A - Batch C'];
       }
     }
     
     if (_type.toLowerCase() == 'lecture') {
       _batches = _batches.where((b) => !b.toLowerCase().contains('batch')).toList();
-      if (_batches.isEmpty) _batches = ['All'];
+      if (_batches.isEmpty) _batches = ['D15A - All'];
     }
 
     if (!_batches.contains(_batch)) {
