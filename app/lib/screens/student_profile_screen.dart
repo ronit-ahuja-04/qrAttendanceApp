@@ -225,7 +225,7 @@ class _DigitalIdCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                             Text(
-                              user?.formattedName.toUpperCase() ?? 'MANISH C. AWARI',
+                              user?.formattedName ?? 'Manish C. Awari',
                               style: context.textStyles.vesitHeadlineSm.copyWith(fontSize: 19, height: 1.1),
                             ),
                             const SizedBox(height: 4),
@@ -294,9 +294,6 @@ class _DigitalIdCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            Divider(color: Colors.grey.shade300, thickness: 1, height: 1),
                           ],
                         ),
                       ),
@@ -432,12 +429,11 @@ class _LogoutButton extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: context.colors.error),
+                color: context.colors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
               child: Icon(Icons.logout, color: context.colors.error),
