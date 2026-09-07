@@ -460,7 +460,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
 
   List<Map<String, dynamic>> _getAllowedScopes() {
     final n = (AmsGlobals.loggedInUser?.name ?? '').toLowerCase();
-    if (n.contains('shanta')) {
+    if (n.contains('shanta Sondur')) {
       return [
         {'subject': 'Soft Computing', 'type': 'Lecture', 'batchTarget': 'All'},
         {'subject': 'Soft Computing', 'type': 'Lab', 'batchTarget': 'Batch A'},
@@ -468,24 +468,48 @@ class _AddSlotModalState extends State<_AddSlotModal> {
         {'subject': 'Soft Computing', 'type': 'Lab', 'batchTarget': 'Batch C'},
       ];
     }
-    if (n.contains('dipti')) {
+    if (n.contains('dipti Karani')) {
       return [
         {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lecture', 'batchTarget': 'All'},
         {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch C'},
       ];
     }
-    if (n.contains('swapnil')) {
+    if (n.contains('swapnil Yadav')) {
       return [
         {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch A'},
         {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch B'},
       ];
     }
-    if (n.contains('pooja')) {
+    if (n.contains('pooja nagdev')) {
       return [
         {'subject': 'Analysis of Algorithm', 'type': 'Lecture', 'batchTarget': 'All'},
         {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch A'},
         {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch B'},
         {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    if (n.contains('pooja shetty')) {
+      return [
+        {'subject': 'Full Stack', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Full Stack', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Full Stack', 'type': 'Lab', 'batchTarget': 'Batch B'},
+        {'subject': 'Full Stack', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    if (n.contains('charusheela nehete')) {
+      return [
+        {'subject': 'Advanced Database Management Technologies', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Advanced Database Management Technologies', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Advanced Database Management Technologies', 'type': 'Lab', 'batchTarget': 'Batch B'},
+        {'subject': 'Advanced Database Management Technologies', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    if (n.contains('manoj sabnis')) {
+      return [
+        {'subject': 'Cloud Computing and Services', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Cloud Computing and Services', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Cloud Computing and Services', 'type': 'Lab', 'batchTarget': 'Batch B'},
+        {'subject': 'Cloud Computing and Services', 'type': 'Lab', 'batchTarget': 'Batch C'},
       ];
     }
     
