@@ -458,25 +458,63 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     }
   }
 
+  List<Map<String, dynamic>> _getAllowedScopes() {
+    final n = (AmsGlobals.loggedInUser?.name ?? '').toLowerCase();
+    if (n.contains('shanta')) {
+      return [
+        {'subject': 'Soft Computing', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Soft Computing', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Soft Computing', 'type': 'Lab', 'batchTarget': 'Batch B'},
+        {'subject': 'Soft Computing', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    if (n.contains('dipti')) {
+      return [
+        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    if (n.contains('swapnil')) {
+      return [
+        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'Batch B'},
+      ];
+    }
+    if (n.contains('pooja')) {
+      return [
+        {'subject': 'Analysis of Algorithm', 'type': 'Lecture', 'batchTarget': 'All'},
+        {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch A'},
+        {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch B'},
+        {'subject': 'Analysis of Algorithm', 'type': 'Lab', 'batchTarget': 'Batch C'},
+      ];
+    }
+    
+    // Fallback: If not hardcoded, use their existing scopes from the backend
+    final backendScopes = AmsGlobals.loggedInUser?.scopes ?? [];
+    if (backendScopes.isNotEmpty) return backendScopes;
+    
+    // Generic fallback for unknown faculties
+    return [
+      {'subject': 'Generic Subject', 'type': 'Lecture', 'batchTarget': 'All'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch A'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch B'},
+      {'subject': 'Generic Subject', 'type': 'Lab', 'batchTarget': 'Batch C'},
+    ];
+  }
+
   void _initScopes() {
-    final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
-    _subjects = scopes.map((s) => s['subject']?.toString() ?? '').toSet().toList();
+    final scopes = _getAllowedScopes();
+    _subjects = scopes.map((s) => s['subject']?.toString() ?? '').toSet().toList()..sort();
     
-    final globalSubjects = AmsGlobals.timetableSlots.map((s) => s['subject']?.toString() ?? '').toList();
-    _subjects.addAll(globalSubjects);
-    _subjects.addAll(['Data Mining', 'Business Analysis']);
-    
-    _subjects = _subjects.where((s) => s.isNotEmpty).toSet().toList()..sort();
-    if (_subjects.isEmpty) _subjects = ['Data Mining', 'Business Analysis'];
-    
+    if (_subjects.isEmpty) _subjects = [''];
     _subject = _subjects.isNotEmpty ? _subjects.first : '';
+    
     _updateDependentDropdowns();
   }
 
   void _updateDependentDropdowns() {
-    final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
+    final scopes = _getAllowedScopes();
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
-    final isSwapnil = (AmsGlobals.loggedInUser?.name ?? '').toLowerCase().contains('swapnil');
     
     if (subjectScopes.isNotEmpty) {
       final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet();
@@ -487,10 +525,6 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     
     _types.remove('Tutorial'); // Tutorial is not used
     
-    if (isSwapnil) {
-      _types = ['Lab'];
-    }
-    
     if (_types.isEmpty) _types = ['Lecture', 'Lab'];
     if (!_types.contains(_type)) _type = _types.first;
     
@@ -498,7 +532,7 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   }
 
   void _updateBatchesForType() {
-    final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
+    final scopes = _getAllowedScopes();
     final validScopes = scopes.where((s) => s['subject'] == _subject && s['type'] == _type).toList();
     
     if (validScopes.isNotEmpty) {

@@ -277,24 +277,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                         ],
                       ),
                     ),
-                    if (!_isLoading && _formattedUpcomingSessions.length > 1) ...[
-                      const SizedBox(height: 24),
-                      _StaggeredFade(
-                        animation: _animController,
-                        index: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionHeader(icon: Icons.calendar_today_rounded, title: 'LATER TODAY'),
-                            ..._formattedUpcomingSessions.skip(1).map(
-                                  (s) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _SessionTile(session: s),
-                                  ),
-                                ),
-                          ],
-                        ),
-                      ),
                     ],
                   ],
                 ),
