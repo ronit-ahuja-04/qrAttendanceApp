@@ -476,12 +476,19 @@ class _AddSlotModalState extends State<_AddSlotModal> {
   void _updateDependentDropdowns() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
     final subjectScopes = scopes.where((s) => s['subject'] == _subject).toList();
+    final isSwapnil = (AmsGlobals.loggedInUser?.name ?? '').toLowerCase().contains('swapnil');
     
     if (subjectScopes.isNotEmpty) {
       final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet();
       _types = scopeTypes.toList()..sort();
     } else {
-      _types = ['Lecture', 'Lab', 'Tutorial'];
+      _types = ['Lecture', 'Lab'];
+    }
+    
+    _types.remove('Tutorial'); // Tutorial is not used
+    
+    if (isSwapnil) {
+      _types = ['Lab'];
     }
     
     if (_types.isEmpty) _types = ['Lecture', 'Lab'];
