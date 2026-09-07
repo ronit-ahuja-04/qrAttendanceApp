@@ -1684,7 +1684,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
 
   // 1. Fetch closed & approved sessions where student is enrolled
   const query = `
-    SELECT s.id as sessionId, s.courseCode, s.createdAt, s.facultyId, s.proxyFacultyId,
+    SELECT s.id as sessionId, s.courseCode, s.createdAt, s.facultyId, s.proxyFacultyId, s.slotId,
            u.name as facultyName
     FROM sessions s
     LEFT JOIN users u ON s.facultyId = u.id
@@ -1732,17 +1732,25 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
           if (err) tSlots = [];
           
           const history = sessions.map(s => {
-            const date = new Date(s.createdAt);
-            const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-            const dayStr = days[date.getDay()];
+            // Use markedAt if available, otherwise fallback to session creation time
+            const recordTime = timeMap[s.sessionId] ? new Date(timeMap[s.sessionId]) : new Date(s.createdAt);
             
             let venue = 'Campus';
+            let matchingSlot = null;
             
-            const matchingSlot = tSlots.find(t => 
-              t.facultyId === s.facultyId && 
-              t.day === dayStr && 
-              s.courseCode.includes(t.subject)
-            );
+            if (s.slotId) {
+              matchingSlot = tSlots.find(t => t.id === s.slotId);
+            }
+            
+            // Fallback for older sessions without slotId
+            if (!matchingSlot) {
+              const dayStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }).format(recordTime);
+              matchingSlot = tSlots.find(t => 
+                t.facultyId === s.facultyId && 
+                t.day === dayStr && 
+                s.courseCode.includes(t.subject)
+              );
+            }
             
             if (matchingSlot) {
               venue = matchingSlot.venue;
@@ -1750,9 +1758,8 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
               venue = 'Seminar Hall';
             }
             
-            // Use markedAt if available, otherwise fallback to session creation time
-            const recordTime = timeMap[s.sessionId] ? new Date(timeMap[s.sessionId]) : date;
-            const timeStr = recordTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            // Format time in IST
+            const timeStr = recordTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
             
             return {
               sessionId: s.sessionId,
@@ -1761,7 +1768,7 @@ app.get('/api/attendance/student/:studentId/history', (req, res) => {
               location: venue,
               professor: s.facultyName || 'Unknown Faculty',
               status: attendanceMap[s.sessionId] === 'present' ? 'present' : 'missed',
-              date: s.createdAt
+              date: recordTime.toISOString() // Use actual log time for date grouping
             };
           });
           
