@@ -1746,7 +1746,67 @@ app.get('/api/timetable/student/:studentId', (req, res) => {
 
     db.all(query, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      
+      // Also fetch any scheduled/active sessions for this student for today
+      // that might have been created manually by faculty
+      const activeQuery = `
+        SELECT s.*, u.name as facultyName, u.email as facultyEmail
+        FROM sessions s
+        LEFT JOIN users u ON s.facultyId = u.id
+        WHERE s.status IN ('scheduled', 'active') 
+          AND s.enrolledStudentIds LIKE ?
+      `;
+      db.all(activeQuery, [`%${studentId}%`], (err, activeSessions) => {
+        if (err) {
+          console.error("Error fetching active sessions for student:", err.message);
+          return res.json(rows); // fallback to just timetable slots
+        }
+        
+        const finalRows = [...rows];
+        
+        for (const s of activeSessions) {
+          let meta = {};
+          try { meta = JSON.parse(s.metadata || '{}'); } catch(e){}
+          
+          // Check if session belongs to today
+          const sessionDateStr = meta.date || s.createdAt.substring(0, 10);
+          const todayDateStr = new Date().toISOString().substring(0, 10);
+          
+          // If the day param is for today, check the date. (If not, we might not want to show it, but usually day is today).
+          // We'll just include it if it's scheduled/active right now.
+          
+          let type = 'Lecture';
+          if (s.courseCode && s.courseCode.toLowerCase().includes('lab')) type = 'Lab';
+          else if (s.batchTarget && s.batchTarget.includes('Batch')) type = 'Lab';
+          
+          // Avoid duplicating static slots that might have the exact same subject and time
+          const mappedSubject = s.courseCode ? s.courseCode.replace(' - Lab', '').replace(' - Lecture', '') : '';
+          const sTime = meta.startTime || s.startTime || '';
+          
+          const exists = finalRows.some(r => r.subject === mappedSubject && r.startTime === sTime);
+          
+          if (!exists) {
+            finalRows.push({
+              id: s.id,
+              facultyId: s.facultyId,
+              subject: mappedSubject,
+              day: day,
+              startTime: sTime,
+              endTime: meta.endTime || s.endTime || '',
+              type: type,
+              batchTarget: s.batchTarget,
+              facultyName: s.facultyName,
+              facultyEmail: s.facultyEmail,
+              isActiveSession: true
+            });
+          }
+        }
+        
+        // Sort by start time
+        finalRows.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+        
+        res.json(finalRows);
+      });
     });
   });
 });

@@ -103,14 +103,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       if (eEpoch < sEpoch) eEpoch += 24 * 60 * 60 * 1000;
 
       if (eEpoch > nowEpoch) {
-        sessions.add({
-          'time': '${format12Hour(startTime)} - ${format12Hour(endTime)}',
-          'subject': subject,
-          'detail': '$facultyName • $venue',
-          'start_epoch': sEpoch,
-          'end_epoch': eEpoch,
-          'original_session': session,
-        });
+        // Filter by the selected tab (Lecture vs Lab)
+        if (_isLab(session) ? _selectedType == 'Lab' : _selectedType == 'Lecture') {
+          sessions.add({
+            'time': '${format12Hour(startTime)} - ${format12Hour(endTime)}',
+            'subject': subject,
+            'detail': '$facultyName • $venue',
+            'start_epoch': sEpoch,
+            'end_epoch': eEpoch,
+            'original_session': session,
+          });
+        }
       }
     }
     sessions.sort((a, b) =>
@@ -516,7 +519,8 @@ class _SubjectHealthDeckState extends State<_SubjectHealthDeck> {
   }
 
   bool _isLab(dynamic s) {
-    final code = (s['courseCode'] as String? ?? '').toLowerCase();
+    if (s['type'] != null) return s['type'] == 'Lab';
+    final code = (s['courseCode'] as String? ?? s['subject'] as String? ?? '').toLowerCase();
     return code.contains('lab');
   }
 
@@ -988,20 +992,16 @@ class _LiveCountdownCard extends StatelessWidget {
               if (session['original_session']?['batchTarget'] != null)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                      horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AmsGlobals.getBatchColor(session['original_session']['batchTarget'])
-                        .withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                        color: AmsGlobals.getBatchColor(
-                                session['original_session']['batchTarget'])
-                            .withValues(alpha: 0.3)),
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     session['original_session']['batchTarget'],
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color:
                           AmsGlobals.getBatchColor(session['original_session']['batchTarget']),
@@ -1107,20 +1107,16 @@ class _SessionTile extends StatelessWidget {
                     if (session['original_session']?['batchTarget'] != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: AmsGlobals.getBatchColor(session['original_session']['batchTarget'])
-                              .withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              color: AmsGlobals.getBatchColor(
-                                      session['original_session']['batchTarget'])
-                                  .withValues(alpha: 0.3)),
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           session['original_session']['batchTarget'],
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color:
                                 AmsGlobals.getBatchColor(session['original_session']['batchTarget']),
