@@ -1900,15 +1900,20 @@ function parseTimeStr(tStr) {
   return hr * 60 + min;
 }
 
-function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, excludeId, callback) {
+function checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, excludeId, callback) {
   db.all('SELECT ts.*, u.name as facultyName FROM timetable_slots ts JOIN users u ON ts.facultyId = u.id WHERE ts.day = ?', [day], (err, slots) => {
     if (err) return callback(err, null);
     
     const newStart = parseTimeStr(startTime);
     const newEnd = parseTimeStr(endTime);
 
-    for (const slot of slots) {
-      if (excludeId && slot.id === excludeId) continue;
+    const checkNext = (index) => {
+      if (index >= slots.length) {
+        return callback(null, null); // No overlap
+      }
+
+      const slot = slots[index];
+      if (excludeId && slot.id === excludeId) return checkNext(index + 1);
       
       const st = slot.startTime || '00:00';
       const et = slot.endTime || '00:00';
@@ -1922,21 +1927,26 @@ function checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, 
            return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${st} (Venue: ${slot.venue}).`);
         }
         
-        const bTarget = batchTarget || '';
-        const sBatchTarget = slot.batchTarget || '';
-        const parts1 = bTarget.split(' - ');
-        const parts2 = sBatchTarget.split(' - ');
-        if (parts1.length === 2 && parts2.length === 2) {
-          const div1 = parts1[0]; const sub1 = parts1[1];
-          const div2 = parts2[0]; const sub2 = parts2[1];
-          if (div1 === div2 && (sub1 === 'All' || sub2 === 'All' || sub1 === sub2)) {
+        // Use the exact same logic as sessions to see if there is ANY student who matches BOTH targets
+        const q1 = getSessionTargetStudents(subject, batchTarget);
+        const q2 = getSessionTargetStudents(slot.subject, slot.batchTarget);
+        
+        const overlapQuery = `SELECT 1 FROM users WHERE (${q1}) AND (${q2}) LIMIT 1`;
+        
+        db.get(overlapQuery, [], (err, overlapRow) => {
+          if (err) return callback(err, null);
+          if (overlapRow) {
             const facName = slot.facultyName || slot.facultyId;
             return callback(null, `Conflict: ${slot.batchTarget} is already scheduled for '${slot.subject}' with Prof. ${facName} at ${slot.startTime} (Venue: ${slot.venue}).`);
           }
-        }
+          checkNext(index + 1);
+        });
+      } else {
+        checkNext(index + 1);
       }
-    }
-    callback(null, null); // No overlap
+    };
+
+    checkNext(0);
   });
 }
 
@@ -1957,7 +1967,7 @@ app.post('/api/timetable', (req, res) => {
   const { facultyId, day, subject, type, batchTarget, venue, startTime } = req.body;
   const endTime = calculateEndTime(startTime, type);
   
-  checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, null, (err, conflictError) => {
+  checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, null, (err, conflictError) => {
     if (err) return res.status(500).json({ error: err.message });
     if (conflictError) return res.status(400).json({ error: conflictError });
     
@@ -1980,7 +1990,7 @@ app.put('/api/timetable/:id', (req, res) => {
   const { facultyId, day, subject, type, batchTarget, venue, startTime } = req.body;
   const endTime = calculateEndTime(startTime, type);
   
-  checkTimetableOverlap(facultyId, day, batchTarget, startTime, endTime, id, (err, conflictError) => {
+  checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, id, (err, conflictError) => {
     if (err) return res.status(500).json({ error: err.message });
     if (conflictError) return res.status(400).json({ error: conflictError });
 
