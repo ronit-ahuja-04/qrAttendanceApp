@@ -199,7 +199,6 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                              if (AmsGlobals.loggedInUser?.isCoordinator == true) ...[
                                 Expanded(
                                   child: _ActionHub(
                                     isLoading: _isLoading,
@@ -215,7 +214,6 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 24),
-                              ],
                                 Expanded(
                                   child: _ActionHub(
                                     isLoading: _isLoading,
@@ -283,22 +281,20 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
 
-                              if (AmsGlobals.loggedInUser?.isCoordinator == true) ...[
-                                Expanded(
-                                  child: _ActionHub(
-                                    isLoading: _isLoading,
-                                    icon: Icons.swap_horiz_rounded,
-                                    title: 'Proxy QR',
-                                    subtitle: 'Another faculty',
-                                    isCompact: true,
-                                    onTap: () => Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                                const GlobalConfigureSessionScreen())),
-                                  ),
+                              Expanded(
+                                child: _ActionHub(
+                                  isLoading: _isLoading,
+                                  icon: Icons.swap_horiz_rounded,
+                                  title: 'Proxy QR',
+                                  subtitle: 'Another faculty',
+                                  isCompact: true,
+                                  onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              const GlobalConfigureSessionScreen())),
                                 ),
-                                const SizedBox(width: 16),
-                              ],
+                              ),
+                              const SizedBox(width: 16),
                               Expanded(
                                 child: _ActionHub(
                                   isLoading: _isLoading,

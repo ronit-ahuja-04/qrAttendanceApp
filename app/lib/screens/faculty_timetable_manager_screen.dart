@@ -460,13 +460,17 @@ class _AddSlotModalState extends State<_AddSlotModal> {
 
   void _initScopes() {
     final scopes = AmsGlobals.loggedInUser?.scopes ?? [];
-    if (scopes.isNotEmpty) {
-      _subjects = scopes.map((s) => s['subject']?.toString() ?? '').toSet().toList()..sort();
-      _subject = _subjects.isNotEmpty ? _subjects.first : '';
-      _updateDependentDropdowns();
-    }
-    if (_subjects.isEmpty) _subjects = [''];
-    if (_subject.isEmpty) _subject = _subjects.isNotEmpty ? _subjects.first : '';
+    _subjects = scopes.map((s) => s['subject']?.toString() ?? '').toSet().toList();
+    
+    final globalSubjects = AmsGlobals.timetableSlots.map((s) => s['subject']?.toString() ?? '').toList();
+    _subjects.addAll(globalSubjects);
+    _subjects.addAll(['Data Mining', 'Business Analysis']);
+    
+    _subjects = _subjects.where((s) => s.isNotEmpty).toSet().toList()..sort();
+    if (_subjects.isEmpty) _subjects = ['Data Mining', 'Business Analysis'];
+    
+    _subject = _subjects.isNotEmpty ? _subjects.first : '';
+    _updateDependentDropdowns();
   }
 
   void _updateDependentDropdowns() {
@@ -476,16 +480,14 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     if (subjectScopes.isNotEmpty) {
       final scopeTypes = subjectScopes.map((s) => s['type']?.toString() ?? 'Lecture').toSet();
       _types = scopeTypes.toList()..sort();
-      if (_types.isEmpty) _types = ['Lecture'];
-      if (!_types.contains(_type)) _type = _types.first;
-      
-      _updateBatchesForType();
     } else {
-      _types = ['Lecture', 'Lab'];
-      _type = 'Lecture';
-      _batches = [''];
-      _batch = '';
+      _types = ['Lecture', 'Lab', 'Tutorial'];
     }
+    
+    if (_types.isEmpty) _types = ['Lecture', 'Lab'];
+    if (!_types.contains(_type)) _type = _types.first;
+    
+    _updateBatchesForType();
   }
 
   void _updateBatchesForType() {
@@ -494,24 +496,26 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     
     if (validScopes.isNotEmpty) {
       _batches = validScopes.map((s) => s['batchTarget']?.toString() ?? '').toSet().toList()..sort();
-      
-      if (_type.toLowerCase() == 'lecture') {
-        _batches = _batches.where((b) => !b.toLowerCase().contains('batch')).toList();
-        if (_batches.isEmpty) _batches = [''];
-      }
-
-      if (!_batches.contains(_batch)) {
-        if (_type.toLowerCase() == 'lecture') {
-          // Prefer 'All' or 'TE -' for lectures
-          final allBatch = _batches.where((b) => b.toLowerCase().contains('all') || b.toLowerCase().startsWith('te -')).firstOrNull;
-          _batch = allBatch ?? (_batches.isNotEmpty ? _batches.first : '');
-        } else {
-          _batch = _batches.isNotEmpty ? _batches.first : '';
-        }
-      }
     } else {
-      _batches = [''];
-      _batch = '';
+      if (_type.toLowerCase() == 'lecture') {
+        _batches = ['All'];
+      } else {
+        _batches = ['Batch A', 'Batch B', 'Batch C'];
+      }
+    }
+    
+    if (_type.toLowerCase() == 'lecture') {
+      _batches = _batches.where((b) => !b.toLowerCase().contains('batch')).toList();
+      if (_batches.isEmpty) _batches = ['All'];
+    }
+
+    if (!_batches.contains(_batch)) {
+      if (_type.toLowerCase() == 'lecture') {
+        final allBatch = _batches.where((b) => b.toLowerCase().contains('all') || b.toLowerCase().startsWith('te -')).firstOrNull;
+        _batch = allBatch ?? (_batches.isNotEmpty ? _batches.first : '');
+      } else {
+        _batch = _batches.isNotEmpty ? _batches.first : '';
+      }
     }
   }
 
