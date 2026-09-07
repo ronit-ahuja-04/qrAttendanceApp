@@ -24,16 +24,14 @@ class _FacultyMainLayoutState extends State<FacultyMainLayout> {
   void initState() {
     super.initState();
     _scrollControllers = List.generate(4, (_) => ScrollController());
-    final isAssistant = AmsGlobals.loggedInUser?.scopes?.isEmpty ?? false;
-    
     _screens = [
       FacultyDashboardScreen(
-        onProfileTap: () => _onTabTapped(isAssistant ? 2 : 3),
+        onProfileTap: () => _onTabTapped(3),
         scrollController: _scrollControllers[0],
       ),
-      if (!isAssistant) const FacultyReadonlyTimetableScreen(),
+      const FacultyReadonlyTimetableScreen(),
       const FacultySessionHistoryScreen(),
-      FacultyProfileScreen(scrollController: _scrollControllers[isAssistant ? 2 : 3]),
+      FacultyProfileScreen(scrollController: _scrollControllers[3]),
     ];
   }
 
@@ -63,8 +61,6 @@ class _FacultyMainLayoutState extends State<FacultyMainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final isAssistant = AmsGlobals.loggedInUser?.scopes?.isEmpty ?? false;
-    
     return PopScope(
       canPop: _currentIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
@@ -93,7 +89,7 @@ class _FacultyMainLayoutState extends State<FacultyMainLayout> {
                   onTap: _onTabTapped,
                   items: [
                     GlassNavItem(icon: Icons.home_rounded, label: 'Home'),
-                    if (!isAssistant) GlassNavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
+                    GlassNavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
                     GlassNavItem(icon: Icons.history_rounded, label: 'History'),
                     GlassNavItem(icon: Icons.person_rounded, label: 'Profile'),
                   ],
