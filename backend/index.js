@@ -798,7 +798,7 @@ app.put('/api/sessions/:id/approve', (req, res) => {
     // Auto-finalize any pending records for this session before notifying
     db.run(`UPDATE attendance_records SET status = 'present' WHERE sessionId = ? AND status = 'pending'`, [id], function (err) {
       // Notify proxy faculty that their session was approved
-      db.get('SELECT proxyFacultyId, courseCode, facultyId FROM sessions WHERE id = ?', [id], (err, row) => {
+      db.get('SELECT proxyFacultyId, courseCode, facultyId, enrolledStudentIds FROM sessions WHERE id = ?', [id], (err, row) => {
         if (row && row.proxyFacultyId) {
           db.get('SELECT name FROM users WHERE id = ?', [row.facultyId], (err, fac) => {
              const facName = fac ? fac.name : row.facultyId;
@@ -809,18 +809,31 @@ app.put('/api/sessions/:id/approve', (req, res) => {
                [uuidv4(), row.proxyFacultyId, title, body, 'Approved', 'primaryContainer', 'onPrimaryContainer', facName, 'check_circle', now]);
              sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
 
-             // Notify students
-             db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [id, 'present'], (err, students) => {
-               if (students && students.length > 0) {
-                 const sTitle = 'Attendance Verified';
-                 const sBody = `Attendance marked for lecture ${row.courseCode} of faculty ${facName}.`;
-                 const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                 students.forEach(s => {
-                   notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
-                   sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
-                 });
-                 notifStmt.finalize();
-               }
+             db.get('SELECT name FROM users WHERE id = ?', [row.proxyFacultyId], (err, pFac) => {
+                const proxyName = pFac ? pFac.name : row.proxyFacultyId;
+                // Notify all enrolled students of their final attendance status
+                const enrolledIds = JSON.parse(row.enrolledStudentIds || '[]');
+                if (enrolledIds.length > 0) {
+                  db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [id], (err, records) => {
+                    const statusMap = {};
+                    if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+                    
+                    const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    enrolledIds.forEach(studentId => {
+                      const status = statusMap[studentId] || 'absent';
+                      const isPresent = (status === 'present');
+                      const sTitle = 'Proxy Session Verified';
+                      const sBody = `The proxy lecture ${row.courseCode} by faculty ${proxyName} has been verified by ${facName}. You were marked ${status.toUpperCase()}.`;
+                      const tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                      const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                      const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
+                      
+                      notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                      sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
+                    });
+                    notifStmt.finalize();
+                  });
+                }
              });
           });
         }
@@ -834,7 +847,7 @@ app.put('/api/sessions/:id/approve', (req, res) => {
 // 4.2) Decline Proxy Session
 app.put('/api/sessions/:id/decline', (req, res) => {
   const { id } = req.params;
-  db.get('SELECT proxyFacultyId, facultyId, courseCode, batchTarget FROM sessions WHERE id = ?', [id], (err, sessionRow) => {
+  db.get('SELECT proxyFacultyId, facultyId, courseCode, batchTarget, enrolledStudentIds FROM sessions WHERE id = ?', [id], (err, sessionRow) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!sessionRow) return res.status(404).json({ error: 'Session not found' });
     
@@ -887,35 +900,46 @@ app.put('/api/sessions/:id/decline', (req, res) => {
              [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Declined', 'tertiaryContainer', 'onTertiaryContainer', facNameA, 'undo', now]);
            sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_DECLINED' });
 
-           // Notify students that their attendance is verified
-           db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [sessionId, 'present'], (err, students) => {
-             if (students && students.length > 0) {
-               const isProxyCredit = finalCreditId === sessionRow.proxyFacultyId;
+           // Notify all enrolled students that their attendance is verified
+           const enrolledIds = JSON.parse(sessionRow.enrolledStudentIds || '[]');
+           if (enrolledIds.length > 0) {
+             const isProxyCredit = finalCreditId === sessionRow.proxyFacultyId;
+             
+             db.get('SELECT name FROM users WHERE id = ?', [finalCreditId], (err, finalFac) => {
+               const finalFacName = finalFac ? finalFac.name : finalCreditId;
                
-               db.get('SELECT name FROM users WHERE id = ?', [finalCreditId], (err, finalFac) => {
-                 const finalFacName = finalFac ? finalFac.name : finalCreditId;
-                 
-                 let sTitle, sBody, tagText;
-                 
-                 if (isProxyCredit && originalCourseCode) {
-                   sTitle = 'Proxy Verified';
-                   sBody = `Proxy lecture attendance marked. Proxied by faculty ${finalFacName} for their subject ${finalCourseCode} in return for ${facNameA}'s lecture ${originalCourseCode}.`;
-                   tagText = 'PRESENT (Proxy)';
-                 } else {
-                   sTitle = 'Attendance Verified';
-                   sBody = `Attendance marked for lecture ${finalCourseCode} of faculty ${finalFacName}.`;
-                   tagText = 'PRESENT';
-                 }
+               db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [sessionId], (err, records) => {
+                 const statusMap = {};
+                 if (records) records.forEach(r => statusMap[r.studentId] = r.status);
                  
                  const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                 students.forEach(s => {
-                   notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, tagText, 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
-                   sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
+                 enrolledIds.forEach(studentId => {
+                   const status = statusMap[studentId] || 'absent';
+                   const isPresent = (status === 'present');
+                   const statusStr = status.toUpperCase();
+                   
+                   let sTitle, sBody, tagText;
+                   
+                   if (isProxyCredit && originalCourseCode) {
+                     sTitle = 'Proxy Verified';
+                     sBody = `Proxy lecture verified. Proxied by faculty ${finalFacName} for their subject ${finalCourseCode} in return for ${facNameA}'s lecture ${originalCourseCode}. You were marked ${statusStr}.`;
+                     tagText = isPresent ? 'PRESENT (Proxy)' : 'ABSENT (Proxy)';
+                   } else {
+                     sTitle = 'Proxy Verified (Declined)';
+                     sBody = `Proxy lecture was declined by ${facNameA}. Attendance recorded for lecture ${finalCourseCode} of faculty ${finalFacName}. You were marked ${statusStr}.`;
+                     tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                   }
+                   
+                   const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                   const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
+                   
+                   notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                   sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
                  });
                  notifStmt.finalize();
                });
-             }
-           });
+             });
+           }
         });
         
         res.json({ success: true, message: 'Session declined successfully' });
