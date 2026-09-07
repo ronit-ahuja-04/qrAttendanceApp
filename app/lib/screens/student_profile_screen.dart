@@ -294,6 +294,7 @@ class _DigitalIdCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
                           ],
                         ),
                       ),
