@@ -103,17 +103,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       if (eEpoch < sEpoch) eEpoch += 24 * 60 * 60 * 1000;
 
       if (eEpoch > nowEpoch) {
-        // Filter by the selected tab (Lecture vs Lab)
-        if (_isLab(session) ? _selectedType == 'Lab' : _selectedType == 'Lecture') {
-          sessions.add({
-            'time': '${format12Hour(startTime)} - ${format12Hour(endTime)}',
-            'subject': subject,
-            'detail': '$facultyName • $venue',
-            'start_epoch': sEpoch,
-            'end_epoch': eEpoch,
-            'original_session': session,
-          });
-        }
+        sessions.add({
+          'time': '${format12Hour(startTime)} - ${format12Hour(endTime)}',
+          'subject': subject,
+          'detail': '$facultyName • $venue',
+          'start_epoch': sEpoch,
+          'end_epoch': eEpoch,
+          'original_session': session,
+        });
       }
     }
     sessions.sort((a, b) =>
