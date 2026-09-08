@@ -729,15 +729,15 @@ app.post('/sessions', (req, res) => {
             approvalStatus = 'approved';
             insertSession(isSeminar);
           } else {
-            // Lecture Rule: Check if proxy faculty teaches this division as a LECTURER
+            // Lecture Rule: Check if proxy faculty teaches ANY subject to this division
             let baseDivision = batchTarget || '';
             if (baseDivision.includes(' - ')) {
               baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
             }
-            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget = ? LIMIT 1`, [proxyFacultyId, `${baseDivision} - All`], (err, teachesDiv) => {
+            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, [proxyFacultyId, `%${baseDivision}%`], (err, teachesDiv) => {
               if (err) return res.status(500).json({ error: err.message });
               if (!teachesDiv) {
-                approvalStatus = 'approved'; // They don't teach this division as a lecturer -> Auto Approve
+                approvalStatus = 'approved'; // They don't teach this division at all -> Auto Approve
               }
               insertSession(false);
             });
