@@ -86,6 +86,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning, color: Colors.white),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Email and password cannot be empty!')),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade800,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     
     User? user;
     try {
@@ -263,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 Text(
-                                  'INSTITUTE OF TECHNOLOGY',
+                                  'INSTITUTE OF TECHNOLOGY (Secured)',
                                   style: context.textStyles.vesitHeadlineMd.copyWith(color: context.colors.vesitGold),
                                   textAlign: TextAlign.center,
                                 ),

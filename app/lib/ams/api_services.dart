@@ -296,7 +296,7 @@ class ApiSessionService {
       }
       return null;
     } catch (e) {
-      if (e.toString().contains('bound to another device')) {
+      if (e.toString().contains('This device is already registered') || e.toString().contains('bound to another device')) {
         rethrow;
       }
       print('LOGIN ERROR: $e');
