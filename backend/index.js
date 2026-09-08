@@ -731,10 +731,10 @@ app.post('/sessions', (req, res) => {
             if (baseDivision.includes(' - ')) {
               baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
             }
-            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget = ? LIMIT 1`, [proxyFacultyId, `${baseDivision} - All`], (err, teachesDiv) => {
+            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, [proxyFacultyId, `%${baseDivision}%`], (err, teachesDiv) => {
               if (err) return res.status(500).json({ error: err.message });
               if (!teachesDiv) {
-                approvalStatus = 'approved'; // They don't teach this division as a lecturer -> Auto Approve
+                approvalStatus = 'approved'; // They don't teach this division -> Auto Approve
               }
               insertSession(false);
             });
@@ -2335,48 +2335,44 @@ cron.schedule('59 23 * * *', () => {
       db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE id = ?`, [sessionRow.id], function (err) {
         if (err) return;
         
-        // Finalize any pending attendance records
-        db.run(`UPDATE attendance_records SET status = 'present' WHERE sessionId = ? AND status = 'pending'`, [sessionRow.id], function (err) {
+        const now = new Date().toISOString();
+        
+        // Notify proxy faculty
+        db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : sessionRow.facultyId;
+          const title = 'Proxy Auto-Approved';
+          const body = `Your proxy session for ${sessionRow.courseCode} was auto-approved because it wasn't reviewed.`;
           
-          const now = new Date().toISOString();
-          
-          // Notify proxy faculty
-          db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, fac) => {
-            const facName = fac ? fac.name : sessionRow.facultyId;
-            const title = 'Proxy Auto-Approved';
-            const body = `Your proxy session for ${sessionRow.courseCode} was auto-approved because it wasn't reviewed.`;
-            
-            db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now]);
-            sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
+          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now]);
+          sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
 
-            db.get('SELECT name FROM users WHERE id = ?', [sessionRow.proxyFacultyId], (err, pFac) => {
-              const proxyName = pFac ? pFac.name : sessionRow.proxyFacultyId;
-              
-              // Notify students
-              const enrolledIds = JSON.parse(sessionRow.enrolledStudentIds || '[]');
-              if (enrolledIds.length > 0) {
-                db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [sessionRow.id], (err, records) => {
-                  const statusMap = {};
-                  if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+          db.get('SELECT name FROM users WHERE id = ?', [sessionRow.proxyFacultyId], (err, pFac) => {
+            const proxyName = pFac ? pFac.name : sessionRow.proxyFacultyId;
+            
+            // Notify students
+            const enrolledIds = JSON.parse(sessionRow.enrolledStudentIds || '[]');
+            if (enrolledIds.length > 0) {
+              db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [sessionRow.id], (err, records) => {
+                const statusMap = {};
+                if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+                
+                const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                enrolledIds.forEach(studentId => {
+                  const status = statusMap[studentId] || 'absent';
+                  const isPresent = (status === 'present');
+                  const sTitle = 'Proxy Session Auto-Verified';
+                  const sBody = `The proxy lecture ${sessionRow.courseCode} by faculty ${proxyName} was auto-verified by the system. You were marked ${status.toUpperCase()}.`;
+                  const tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                  const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                  const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
                   
-                  const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                  enrolledIds.forEach(studentId => {
-                    const status = statusMap[studentId] || 'absent';
-                    const isPresent = (status === 'present');
-                    const sTitle = 'Proxy Session Auto-Verified';
-                    const sBody = `The proxy lecture ${sessionRow.courseCode} by faculty ${proxyName} was auto-verified by the system. You were marked ${status.toUpperCase()}.`;
-                    const tagText = isPresent ? 'PRESENT' : 'ABSENT';
-                    const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
-                    const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
-                    
-                    notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
-                    sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
-                  });
-                  notifStmt.finalize();
+                  notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                  sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
                 });
-              }
-            });
+                notifStmt.finalize();
+              });
+            }
           });
         });
       });
