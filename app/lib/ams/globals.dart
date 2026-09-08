@@ -147,8 +147,8 @@ class AmsGlobals {
   static String formatSubjectName(String name) {
     if (name.isEmpty) return name;
     
-    // Remove "(DMBI)" case-insensitively and trim
-    String cleaned = name.replaceAll(RegExp(r'\s*\(\s*DMBI\s*\)', caseSensitive: false), '').trim();
+    // Keep the full name so it matches the backend database perfectly
+    String cleaned = name.trim();
     
     // Title Case implementation
     final words = cleaned.split(' ');

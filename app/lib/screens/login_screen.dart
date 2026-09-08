@@ -282,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 Text(
-                                  'INSTITUTE OF TECHNOLOGY (Secured)',
+                                  'INSTITUTE OF TECHNOLOGY',
                                   style: context.textStyles.vesitHeadlineMd.copyWith(color: context.colors.vesitGold),
                                   textAlign: TextAlign.center,
                                 ),
