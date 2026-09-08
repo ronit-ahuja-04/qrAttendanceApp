@@ -726,15 +726,15 @@ app.post('/sessions', (req, res) => {
             approvalStatus = 'approved';
             insertSession(isSeminar);
           } else {
-            // Lecture Rule: Check if proxy faculty teaches any subject to this division
+            // Lecture Rule: Check if proxy faculty teaches this division as a LECTURER
             let baseDivision = batchTarget || '';
             if (baseDivision.includes(' - ')) {
               baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
             }
-            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, [proxyFacultyId, `%${baseDivision}%`], (err, teachesDiv) => {
+            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget = ? LIMIT 1`, [proxyFacultyId, `${baseDivision} - All`], (err, teachesDiv) => {
               if (err) return res.status(500).json({ error: err.message });
               if (!teachesDiv) {
-                approvalStatus = 'approved'; // They don't teach this division -> Auto Approve
+                approvalStatus = 'approved'; // They don't teach this division as a lecturer -> Auto Approve
               }
               insertSession(false);
             });
@@ -886,13 +886,22 @@ app.put('/api/sessions/:id/decline', (req, res) => {
             // Proxy teaches this subject to this class, so credit goes to Proxy with THEIR subject
             finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, row.subject, sessionRow.courseCode);
           } else {
-            // Fallback: Find ANY subject the proxy teaches to give them credit
-            db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? LIMIT 1`, [sessionRow.proxyFacultyId], (err, anyRow) => {
-              if (anyRow) {
-                finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, anyRow.subject, sessionRow.courseCode);
+            // Fallback: Find a subject the proxy teaches to THIS division (e.g. a lab)
+            db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, 
+              [sessionRow.proxyFacultyId, `%${baseDivision}%`], 
+              (err, divRow) => {
+              if (divRow) {
+                finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, divRow.subject, sessionRow.courseCode);
               } else {
-                // Proxy has no subjects assigned at all, default to Original Faculty
-                finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
+                // Fallback: Find ANY subject the proxy teaches to give them credit
+                db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? LIMIT 1`, [sessionRow.proxyFacultyId], (err, anyRow) => {
+                  if (anyRow) {
+                    finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, anyRow.subject, sessionRow.courseCode);
+                  } else {
+                    // Proxy has no subjects assigned at all, default to Original Faculty
+                    finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
+                  }
+                });
               }
             });
           }
