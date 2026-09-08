@@ -15,26 +15,6 @@ const { authenticateToken, generateToken } = require('./middleware/auth');
 const { apiLimiter, loginLimiter, attendanceLimiter } = require('./middleware/rateLimiter');
 const app = express();
 
-app.use(helmet());
-app.use(apiLimiter);
-
-// Helper to format subject names
-function formatSubjectName(name) {
-  if (!name) return name;
-  let cleaned = name.replace(/\s*\(\s*DMBI\s*\)/gi, '').trim();
-  const words = cleaned.split(' ');
-  const lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
-  
-  return words.map((word, idx) => {
-    if (!word) return '';
-    const lowerWord = word.toLowerCase();
-    if (idx > 0 && idx < words.length - 1 && lowerCaseWords.includes(lowerWord)) {
-      return lowerWord;
-    }
-    return word.charAt(0).toUpperCase() + word.substring(1).toLowerCase();
-  }).join(' ');
-}
-
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:56086',
@@ -62,6 +42,26 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'ngrok-skip-browser-warning', 'x-requested-with', 'Accept', 'Cache-Control', 'Pragma', 'Expires']
 }));
+
+app.use(helmet());
+app.use(apiLimiter);
+
+// Helper to format subject names
+function formatSubjectName(name) {
+  if (!name) return name;
+  let cleaned = name.replace(/\s*\(\s*DMBI\s*\)/gi, '').trim();
+  const words = cleaned.split(' ');
+  const lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
+  
+  return words.map((word, idx) => {
+    if (!word) return '';
+    const lowerWord = word.toLowerCase();
+    if (idx > 0 && idx < words.length - 1 && lowerCaseWords.includes(lowerWord)) {
+      return lowerWord;
+    }
+    return word.charAt(0).toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
 app.use(express.json());
 
 // Maintenance Mode Middleware
