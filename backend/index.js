@@ -15,6 +15,9 @@ const { authenticateToken, generateToken } = require('./middleware/auth');
 const { apiLimiter, loginLimiter, attendanceLimiter } = require('./middleware/rateLimiter');
 const app = express();
 
+// Trust reverse proxy (Render/Cloudflare) to parse X-Forwarded-For correctly for rate limiters
+app.set('trust proxy', 1);
+
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:56086',
