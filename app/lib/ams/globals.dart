@@ -143,29 +143,11 @@ class AmsGlobals {
     }).join(' ');
   }
 
-  /// Formats subject names to Title Case and removes specific extraneous tags like (DMBI)
+  /// Formats subject names (returns original trimmed name to preserve acronyms perfectly)
   static String formatSubjectName(String name) {
     if (name.isEmpty) return name;
     
-    // Keep the full name so it matches the backend database perfectly
-    String cleaned = name.trim();
-    
-    // Title Case implementation
-    final words = cleaned.split(' ');
-    final lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
-    
-    return words.asMap().entries.map((entry) {
-      final idx = entry.key;
-      final word = entry.value;
-      if (word.isEmpty) return '';
-      
-      final lowerWord = word.toLowerCase();
-      // Lowercase specific words unless it's the first or last word
-      if (idx > 0 && idx < words.length - 1 && lowerCaseWords.contains(lowerWord)) {
-        return lowerWord;
-      }
-      
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ');
+    // Keep the full name so it matches the backend database perfectly, preserving acronyms like (DMBI)
+    return name.trim();
   }
 }

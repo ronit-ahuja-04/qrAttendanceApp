@@ -512,14 +512,14 @@ class _AddSlotModalState extends State<_AddSlotModal> {
     }
     if (n.contains('dipti')) {
       return [
-        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lecture', 'batchTarget': 'D15A - All'},
-        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'D15A - Batch C'},
+        {'subject': 'Data Mining and Business Intelligence', 'type': 'Lecture', 'batchTarget': 'D15A - All'},
+        {'subject': 'Data Mining and Business Intelligence', 'type': 'Lab', 'batchTarget': 'D15A - Batch C'},
       ];
     }
     if (n.contains('swapnil')) {
       return [
-        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'D15A - Batch A'},
-        {'subject': 'Data Mining and Business Intelligence (DMBI)', 'type': 'Lab', 'batchTarget': 'D15A - Batch B'},
+        {'subject': 'Data Mining and Business Intelligence', 'type': 'Lab', 'batchTarget': 'D15A - Batch A'},
+        {'subject': 'Data Mining and Business Intelligence', 'type': 'Lab', 'batchTarget': 'D15A - Batch B'},
       ];
     }
     if (n.contains('pooja nagdev')) {
