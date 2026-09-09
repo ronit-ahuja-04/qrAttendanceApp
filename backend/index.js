@@ -784,27 +784,51 @@ app.post('/sessions', (req, res) => {
   });
 });
 
-// 4) Start Session (generates initial QR code)
+// 4) Start Session (generates pre-fetched QR codes)
 app.post('/api/sessions/:id/start', (req, res) => {
   const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
   const { totalSessionSeconds } = req.body;
   const now = new Date();
-  const issuedAt = now;
-  const expiresAt = new Date(now.getTime() + (totalSessionSeconds * 1000));
+  const sessionLength = totalSessionSeconds || 30; // default to 30 if missing
+  const qrCodesCount = Math.ceil(sessionLength / 2); // 2-second TTL
+  
+  const qrCodes = [];
+  for (let i = 0; i < qrCodesCount; i++) {
+    const validFrom = new Date(now.getTime() + (i * 2000));
+    const validTo = new Date(now.getTime() + ((i + 1) * 2000));
+    qrCodes.push({
+      code: generateQrCode(),
+      validFrom: validFrom.toISOString(),
+      expiresAt: validTo.toISOString()
+    });
+  }
 
-  const qrCode = generateQrCode();
-
-  db.run(`UPDATE sessions SET status = 'active', qrCode = ?, qrIssuedAt = ?, qrExpiresAt = ? WHERE id = ? OR groupId = ?`,
-    [qrCode, issuedAt.toISOString(), expiresAt.toISOString(), id, id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      db.get(`SELECT * FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, row) => {
-        if (err || !row) return res.status(500).json({ error: 'Not found' });
-        row.qrCode = { code: row.qrCode, issuedAt: row.qrIssuedAt, expiresAt: row.qrExpiresAt };
-        res.json(row);
-      });
+  // Update status, set the first QR as active for backward compatibility, and store the array in metadata
+  db.get(`SELECT metadata FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    let metadata = {};
+    if (row && row.metadata) {
+      try { metadata = JSON.parse(row.metadata); } catch(e) {}
     }
-  );
+    metadata.qrCodes = qrCodes;
+    
+    // Set first QR code to qrCode column for fallback/compat
+    const firstQr = qrCodes[0];
+    
+    db.run(`UPDATE sessions SET status = 'active', qrCode = ?, qrIssuedAt = ?, qrExpiresAt = ?, metadata = ? WHERE id = ? OR groupId = ?`,
+      [firstQr.code, firstQr.validFrom, firstQr.expiresAt, JSON.stringify(metadata), id, id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        db.get(`SELECT * FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, updatedRow) => {
+          if (err || !updatedRow) return res.status(500).json({ error: 'Not found' });
+          // Send back the first QR in the old format, PLUS the full metadata
+          updatedRow.qrCode = { code: updatedRow.qrCode, issuedAt: updatedRow.qrIssuedAt, expiresAt: updatedRow.qrExpiresAt };
+          res.json(updatedRow);
+        });
+      }
+    );
+  });
 });
 
 // 4.1) Approve Proxy Session
@@ -1097,8 +1121,27 @@ app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res
     // Use the first session to validate the QR code (since they all share the same QR/timing logic if grouped)
     const baseSession = sessions[0];
     if (baseSession.status !== 'active') return res.status(400).json({ error: 'sessionClosed', message: 'Session is not currently active.' });
-    if (baseSession.qrCode !== code && baseSession.previousQrCode !== code) return res.status(400).json({ error: 'invalidQrCode', message: 'QR Code is invalid or has expired.' });
-    if (new Date() > new Date(baseSession.qrExpiresAt)) return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
+    
+    let metadata = {};
+    try { metadata = JSON.parse(baseSession.metadata || '{}'); } catch(e) {}
+    
+    if (metadata.qrCodes && Array.isArray(metadata.qrCodes)) {
+      const matchedQr = metadata.qrCodes.find(q => q.code === code);
+      if (!matchedQr) {
+        return res.status(400).json({ error: 'invalidQrCode', message: 'QR Code is invalid.' });
+      }
+      
+      const now = new Date();
+      // Allow a 2 second grace period for network latency
+      const expiresAt = new Date(new Date(matchedQr.expiresAt).getTime() + 2000); 
+      if (now > expiresAt) {
+        return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
+      }
+    } else {
+      // Fallback for old active sessions
+      if (baseSession.qrCode !== code && baseSession.previousQrCode !== code) return res.status(400).json({ error: 'invalidQrCode', message: 'QR Code is invalid or has expired.' });
+      if (new Date() > new Date(baseSession.qrExpiresAt)) return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
+    }
 
     // Find all sessions in this group where the student is enrolled
     const matchedSessions = sessions.filter(s => {
