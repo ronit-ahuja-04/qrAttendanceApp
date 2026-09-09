@@ -1132,8 +1132,8 @@ app.post('/api/attendance/mark', authenticateToken, attendanceLimiter, (req, res
       }
       
       const now = new Date();
-      // Allow a 2 second grace period for network latency
-      const expiresAt = new Date(new Date(matchedQr.expiresAt).getTime() + 2000); 
+      // Allow a 4 second grace period for network latency and slow scanners
+      const expiresAt = new Date(new Date(matchedQr.expiresAt).getTime() + 4000); 
       if (now > expiresAt) {
         return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
       }
