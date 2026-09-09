@@ -28,9 +28,10 @@ function authenticateToken(req, res, next) {
           return res.status(401).json({ error: 'unauthorized', message: 'User not found.' });
         }
         
-        // If DB deviceId is null (unbound) OR does not match the token's embedded deviceId snapshot,
-        // it means the binding was changed or cleared after this token was issued. Kill the session.
-        if (!row.deviceId || row.deviceId !== user.deviceId) {
+        // If DB deviceId does not match the token's embedded deviceId snapshot,
+        // it means the binding was claimed by another device after this token was issued. Kill the session.
+        // We implicitly allow requests if row.deviceId is null (unbound) to prevent aggressive data wipes on unbound accounts.
+        if (row.deviceId && row.deviceId !== user.deviceId) {
           return res.status(401).json({ error: 'unbound', message: 'Device binding has changed. Please log in again.' });
         }
         
