@@ -384,6 +384,12 @@ class NotificationService {
             if (jsonStr.isNotEmpty) {
               try {
                 final event = jsonDecode(jsonStr);
+                
+                // INSTANT AUTO LOGOUT HOOK
+                if (event['type'] == 'FORCE_LOGOUT') {
+                  triggerAutoLogout();
+                }
+                
                 final title = event['title'] as String?;
                 final body = event['body'] ?? event['message'] as String?;
                 if (title != null && body != null) {

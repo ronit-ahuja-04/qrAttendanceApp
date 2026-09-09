@@ -78,10 +78,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Admin Route: Reset all student device bindings
 app.get('/api/admin/reset-devices', (req, res) => {
   db.run(`UPDATE users SET deviceId = NULL WHERE role = 'student'`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
+    notifyClients(null, { type: 'FORCE_LOGOUT', message: 'Admin has reset all devices.' });
     res.json({ message: 'All student device bindings have been successfully reset.' });
   });
 });
@@ -492,8 +492,23 @@ app.post('/login', loginLimiter, (req, res) => {
           });
         });
       } else if (row.deviceId !== deviceId) {
-        // Mismatch
-        return res.status(403).json({ error: 'Account bound to another device. Please contact faculty to reset.' });
+        // Mismatch: Gracefully shift login to new device
+        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+          if (err) return res.status(500).json({ error: err.message });
+          if (existing) {
+            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+          }
+          
+          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
+            if (updateErr) return res.status(500).json({ error: 'Failed to bind new device' });
+            
+            // Broadcast FORCE_LOGOUT to kick out the old device instantly
+            notifyClients(row.id, { type: 'FORCE_LOGOUT', message: 'Your account was logged in from another device.' });
+            
+            row.deviceId = deviceId;
+            finalizeLogin();
+          });
+        });
       } else {
         // Matches successfully
         finalizeLogin();

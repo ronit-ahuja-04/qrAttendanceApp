@@ -18,6 +18,52 @@ import 'package:flutter/material.dart';
 import '../screens/login_screen.dart';
 import '../widgets/device_unbound_dialog.dart';
 
+void triggerAutoLogout() {
+  if (AmsGlobals.loggedInUser == null) return;
+  Future.microtask(() async {
+    AmsGlobals.loggedInUser = null;
+    try {
+      if (kIsWeb) {
+        html.window.sessionStorage.remove('ams_user_session');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ams_user_session');
+    } catch (_) {}
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigatorState = AmsGlobals.navigatorKey.currentState;
+      if (navigatorState != null) {
+        navigatorState.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+        
+        Future.delayed(const Duration(milliseconds: 100), () {
+          final newContext = AmsGlobals.navigatorKey.currentState?.context;
+          if (newContext != null && newContext.mounted) {
+            showGeneralDialog(
+              context: newContext,
+              barrierDismissible: false,
+              barrierColor: Colors.black87,
+              transitionDuration: const Duration(milliseconds: 400),
+              pageBuilder: (context, anim1, anim2) => const DeviceUnboundDialog(),
+              transitionBuilder: (context, anim1, anim2, child) {
+                return Transform.scale(
+                  scale: Curves.easeOutBack.transform(anim1.value),
+                  child: FadeTransition(
+                    opacity: anim1,
+                    child: child,
+                  ),
+                );
+              },
+            );
+          }
+        });
+      }
+    });
+  });
+}
+
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner = http.Client();
 
@@ -37,48 +83,7 @@ class AuthenticatedClient extends http.BaseClient {
       }
     } else if (response.statusCode == 401 && AmsGlobals.loggedInUser != null) {
       // Global hook: Auto-logout immediately if the token is rejected (e.g. device unbound)
-      Future.microtask(() async {
-        AmsGlobals.loggedInUser = null;
-        try {
-          if (kIsWeb) {
-            html.window.sessionStorage.remove('ams_user_session');
-          }
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('ams_user_session');
-        } catch (_) {}
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final navigatorState = AmsGlobals.navigatorKey.currentState;
-          if (navigatorState != null) {
-            navigatorState.pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (route) => false,
-            );
-            
-            Future.delayed(const Duration(milliseconds: 100), () {
-              final newContext = AmsGlobals.navigatorKey.currentState?.context;
-              if (newContext != null && newContext.mounted) {
-                showGeneralDialog(
-                  context: newContext,
-                  barrierDismissible: false,
-                  barrierColor: Colors.black87,
-                  transitionDuration: const Duration(milliseconds: 400),
-                  pageBuilder: (context, anim1, anim2) => const DeviceUnboundDialog(),
-                  transitionBuilder: (context, anim1, anim2, child) {
-                    return Transform.scale(
-                      scale: Curves.easeOutBack.transform(anim1.value),
-                      child: FadeTransition(
-                        opacity: anim1,
-                        child: child,
-                      ),
-                    );
-                  },
-                );
-              }
-            });
-          }
-        });
-      });
+      triggerAutoLogout();
     } else if (response.statusCode >= 500 || response.statusCode == 429) {
       final context = AmsGlobals.navigatorKey.currentContext;
       if (context != null) {
