@@ -105,6 +105,14 @@ app.get('/api/test-sse', (req, res) => {
   res.json({ success: true, targetUser: targetUser || 'ALL' });
 });
 
+// Debug endpoint to list connected SSE clients
+app.get('/api/debug/clients', (req, res) => {
+  res.json({
+    clientCount: sseClients.length,
+    clients: sseClients.map(c => c.userId)
+  });
+});
+
 // Global logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
