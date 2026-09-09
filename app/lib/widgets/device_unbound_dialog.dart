@@ -35,7 +35,7 @@ class DeviceUnboundDialog extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.no_cell_rounded,
+                Icons.error_outline_rounded,
                 size: 42,
                 color: Colors.red.shade400,
               ),
