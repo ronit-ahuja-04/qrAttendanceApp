@@ -48,15 +48,15 @@ class AuthenticatedClient extends http.BaseClient {
         } catch (_) {}
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final context = AmsGlobals.navigatorKey.currentContext;
-          if (context != null && context.mounted) {
-            Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          final navigatorState = AmsGlobals.navigatorKey.currentState;
+          if (navigatorState != null) {
+            navigatorState.pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const LoginScreen()),
               (route) => false,
             );
             
             Future.delayed(const Duration(milliseconds: 100), () {
-              final newContext = AmsGlobals.navigatorKey.currentContext;
+              final newContext = AmsGlobals.navigatorKey.currentState?.context;
               if (newContext != null && newContext.mounted) {
                 showGeneralDialog(
                   context: newContext,
