@@ -76,6 +76,9 @@ class _FacultyAttendanceQrGeneratorScreenState
   Timer? _pollingTimer;
   bool _isLoading = true;
 
+  int _networkDelayMs = 0;
+  final Stopwatch _sessionStopwatch = Stopwatch();
+
   @override
   void initState() {
     super.initState();
@@ -95,11 +98,19 @@ class _FacultyAttendanceQrGeneratorScreenState
           slotId: widget.slotId,
         );
       }
-      
+      final reqStart = DateTime.now();
       final result = await AmsGlobals.sessionService.startSession(session.id, widget.qrCodeValiditySeconds);
+      final reqEnd = DateTime.now();
+      
       if (result.ok) {
         session = result.value!;
       }
+      
+      // Calculate one-way network delay (approx half the round trip time)
+      // This allows the frontend to know EXACTLY how much time passed on the backend 
+      // since the QR codes were generated, immune to any clock skew on the device!
+      _networkDelayMs = reqEnd.difference(reqStart).inMilliseconds ~/ 2;
+      
       _session = session;
       AmsGlobals.activeSessionId = _session.id;
 
@@ -148,26 +159,32 @@ class _FacultyAttendanceQrGeneratorScreenState
 
   void _startTimer() {
     _timer?.cancel();
-    int _ticks = 0;
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) async {
+    _sessionStopwatch.reset();
+    _sessionStopwatch.start();
+    
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (t) async {
       if (!mounted) {
         t.cancel();
         return;
       }
-      if (_secondsLeft > 0) {
+      
+      final totalElapsedMs = _networkDelayMs + _sessionStopwatch.elapsedMilliseconds;
+      final int secondsLeft = widget.qrCodeValiditySeconds - (totalElapsedMs ~/ 1000);
+      
+      if (secondsLeft > 0) {
         setState(() {
-          _secondsLeft--;
+          _secondsLeft = secondsLeft;
         });
         
-        _ticks++;
-        // Rotate QR Code every 2 seconds locally using pre-fetched array
-        if (_ticks % 2 == 0) {
-          if (_session.prefetchedQrCodes != null && _session.prefetchedQrCodes!.isNotEmpty) {
-            // Find the correct QR code for this time slice
-            final index = (_ticks ~/ 2);
-            if (index < _session.prefetchedQrCodes!.length) {
+        // Find the correct QR code for this exact true elapsed time slice (2000 ms per QR)
+        final index = totalElapsedMs ~/ 2000;
+        
+        if (_session.prefetchedQrCodes != null && _session.prefetchedQrCodes!.isNotEmpty) {
+          if (index < _session.prefetchedQrCodes!.length) {
+            final targetQr = _session.prefetchedQrCodes![index].code;
+            if (_qrCode != targetQr) {
               setState(() {
-                _qrCode = _session.prefetchedQrCodes![index].code;
+                _qrCode = targetQr;
               });
             }
           }
