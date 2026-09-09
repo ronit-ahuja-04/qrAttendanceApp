@@ -3,6 +3,10 @@ const jwt = require('jsonwebtoken');
 // Use a secure secret in production (e.g. process.env.JWT_SECRET)
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only_12345';
 
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const db = new sqlite3.Database(path.join(__dirname, '../database.sqlite'));
+
 /**
  * Middleware to verify JWT tokens
  */
@@ -19,9 +23,26 @@ function authenticateToken(req, res, next) {
       return res.status(403).json({ error: 'forbidden', message: 'Invalid or expired token.' });
     }
     
-    // Attach the decoded payload to the request object
-    req.user = user;
-    next();
+    // For students, strictly enforce device binding on every request
+    if (user.role === 'student') {
+      db.get('SELECT deviceId FROM users WHERE id = ?', [user.id], (dbErr, row) => {
+        if (dbErr || !row) {
+          return res.status(401).json({ error: 'unauthorized', message: 'User not found.' });
+        }
+        
+        // If DB deviceId is null (unbound) OR does not match the token's embedded deviceId snapshot,
+        // it means the binding was changed or cleared after this token was issued. Kill the session.
+        if (!row.deviceId || row.deviceId !== user.deviceId) {
+          return res.status(401).json({ error: 'unbound', message: 'Device binding has changed. Please log in again.' });
+        }
+        
+        req.user = user;
+        next();
+      });
+    } else {
+      req.user = user;
+      next();
+    }
   });
 }
 
@@ -35,7 +56,8 @@ function generateToken(user) {
     role: user.role,
     email: user.email,
     name: user.name,
-    branch: user.branch
+    branch: user.branch,
+    deviceId: user.deviceId // Inject bound device ID into token
   };
   
   // Token expires in 7 days
