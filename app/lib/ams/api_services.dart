@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:flutter/material.dart';
 import '../screens/login_screen.dart';
+import '../widgets/device_unbound_dialog.dart';
 
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner = http.Client();
@@ -53,9 +54,28 @@ class AuthenticatedClient extends http.BaseClient {
               MaterialPageRoute(builder: (_) => const LoginScreen()),
               (route) => false,
             );
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Session expired or device unbound. Please log in again.'), backgroundColor: Colors.red.shade800),
-            );
+            
+            Future.delayed(const Duration(milliseconds: 100), () {
+              final newContext = AmsGlobals.navigatorKey.currentContext;
+              if (newContext != null && newContext.mounted) {
+                showGeneralDialog(
+                  context: newContext,
+                  barrierDismissible: false,
+                  barrierColor: Colors.black87,
+                  transitionDuration: const Duration(milliseconds: 400),
+                  pageBuilder: (context, anim1, anim2) => const DeviceUnboundDialog(),
+                  transitionBuilder: (context, anim1, anim2, child) {
+                    return Transform.scale(
+                      scale: Curves.easeOutBack.transform(anim1.value),
+                      child: FadeTransition(
+                        opacity: anim1,
+                        child: child,
+                      ),
+                    );
+                  },
+                );
+              }
+            });
           }
         });
       });
