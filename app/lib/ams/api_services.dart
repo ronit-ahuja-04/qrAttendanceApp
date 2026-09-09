@@ -35,18 +35,22 @@ class AuthenticatedClient extends http.BaseClient {
       }
     } else if (response.statusCode == 401 && AmsGlobals.loggedInUser != null) {
       // Global hook: Auto-logout immediately if the token is rejected (e.g. device unbound)
-      final context = AmsGlobals.navigatorKey.currentContext;
-      if (context != null) {
-        Future.microtask(() async {
-          AmsGlobals.loggedInUser = null;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('ams_user_data');
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Session expired or device unbound. Please log in again.'), backgroundColor: Colors.red.shade800),
-          );
-        });
-      }
+      Future.microtask(() async {
+        AmsGlobals.loggedInUser = null;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('ams_user_data');
+        
+        final navigatorState = AmsGlobals.navigatorKey.currentState;
+        if (navigatorState != null) {
+          navigatorState.pushNamedAndRemoveUntil('/login', (route) => false);
+          
+          if (navigatorState.context.mounted) {
+            ScaffoldMessenger.of(navigatorState.context).showSnackBar(
+              SnackBar(content: Text('Session expired or device unbound. Please log in again.'), backgroundColor: Colors.red.shade800),
+            );
+          }
+        }
+      });
     } else if (response.statusCode >= 500 || response.statusCode == 429) {
       final context = AmsGlobals.navigatorKey.currentContext;
       if (context != null) {
