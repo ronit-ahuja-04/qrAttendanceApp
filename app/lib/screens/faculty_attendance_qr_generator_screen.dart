@@ -148,6 +148,7 @@ class _FacultyAttendanceQrGeneratorScreenState
 
   void _startTimer() {
     _timer?.cancel();
+    int _ticks = 0;
     _timer = Timer.periodic(const Duration(seconds: 1), (t) async {
       if (!mounted) {
         t.cancel();
@@ -157,6 +158,20 @@ class _FacultyAttendanceQrGeneratorScreenState
         setState(() {
           _secondsLeft--;
         });
+        
+        _ticks++;
+        // Rotate QR Code every 2 seconds locally using pre-fetched array
+        if (_ticks % 2 == 0) {
+          if (_session.prefetchedQrCodes != null && _session.prefetchedQrCodes!.isNotEmpty) {
+            // Find the correct QR code for this time slice
+            final index = (_ticks ~/ 2);
+            if (index < _session.prefetchedQrCodes!.length) {
+              setState(() {
+                _qrCode = _session.prefetchedQrCodes![index].code;
+              });
+            }
+          }
+        }
       } else {
         // Auto-close session when the timer hits zero
         _closeSession();

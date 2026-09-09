@@ -82,6 +82,7 @@ class AttendanceSession {
   final int presentCount;
   final DateTime? firstLogTime;
   final DateTime? lastLogTime;
+  final List<QrCode>? prefetchedQrCodes;
 
   AttendanceSession({
     required this.id,
@@ -99,6 +100,7 @@ class AttendanceSession {
     this.presentCount = 0,
     this.firstLogTime,
     this.lastLogTime,
+    this.prefetchedQrCodes,
   });
 
   AttendanceSession copyWith({
@@ -116,6 +118,7 @@ class AttendanceSession {
     String? batchTarget,
     String? slotId,
     int? presentCount,
+    List<QrCode>? prefetchedQrCodes,
   }) {
     return AttendanceSession(
       id: id ?? this.id,
@@ -131,6 +134,7 @@ class AttendanceSession {
       batchTarget: batchTarget ?? this.batchTarget,
       slotId: slotId ?? this.slotId,
       presentCount: presentCount ?? this.presentCount,
+      prefetchedQrCodes: prefetchedQrCodes ?? this.prefetchedQrCodes,
     );
   }
 }

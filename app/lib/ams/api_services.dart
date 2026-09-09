@@ -731,6 +731,21 @@ AttendanceSession _parseSession(Map<String, dynamic> json) {
     return [];
   }
 
+  List<QrCode> parsePrefetchedQrs(dynamic metaStr) {
+    if (metaStr == null || metaStr is! String) return [];
+    try {
+      final meta = jsonDecode(metaStr);
+      if (meta['qrCodes'] != null && meta['qrCodes'] is List) {
+        return (meta['qrCodes'] as List).map((q) => QrCode(
+          code: q['code'],
+          issuedAt: DateTime.parse(q['validFrom']).toLocal(),
+          expiresAt: DateTime.parse(q['expiresAt']).toLocal(),
+        )).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   return AttendanceSession(
     id: json['id'],
     courseCode: json['courseCode'],
@@ -751,6 +766,7 @@ AttendanceSession _parseSession(Map<String, dynamic> json) {
     presentCount: json['presentCount'] ?? 0,
     firstLogTime: json['firstLogTime'] != null ? DateTime.parse(json['firstLogTime']).toLocal() : null,
     lastLogTime: json['lastLogTime'] != null ? DateTime.parse(json['lastLogTime']).toLocal() : null,
+    prefetchedQrCodes: parsePrefetchedQrs(json['metadata']),
   );
 }
 
