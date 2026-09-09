@@ -294,33 +294,13 @@ class ApiSessionService {
     try {
       String deviceId = 'unknown_device';
       try {
-        if (kIsWeb) {
-          final prefs = await SharedPreferences.getInstance();
-          String? storedId = prefs.getString('ams_device_id');
-          if (storedId == null) {
-            storedId = const Uuid().v4();
-            await prefs.setString('ams_device_id', storedId);
-          }
-          deviceId = storedId;
-        } else {
-          final deviceInfo = DeviceInfoPlugin();
-          if (Platform.isAndroid) {
-            final androidInfo = await deviceInfo.androidInfo;
-            deviceId = androidInfo.id; // Unique hardware ID
-          } else if (Platform.isIOS) {
-            final iosInfo = await deviceInfo.iosInfo;
-            deviceId = iosInfo.identifierForVendor ?? const Uuid().v4();
-          } else {
-            // Desktop/Other fallback
-            final prefs = await SharedPreferences.getInstance();
-            String? storedId = prefs.getString('ams_device_id');
-            if (storedId == null) {
-              storedId = const Uuid().v4();
-              await prefs.setString('ams_device_id', storedId);
-            }
-            deviceId = storedId;
-          }
+        final prefs = await SharedPreferences.getInstance();
+        String? storedId = prefs.getString('ams_universal_device_id');
+        if (storedId == null) {
+          storedId = const Uuid().v4();
+          await prefs.setString('ams_universal_device_id', storedId);
         }
+        deviceId = storedId;
       } catch (e) {
         print('Error getting device info: $e');
         deviceId = const Uuid().v4(); // Safe fallback
