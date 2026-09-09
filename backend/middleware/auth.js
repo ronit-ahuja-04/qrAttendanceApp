@@ -3,9 +3,7 @@ const jwt = require('jsonwebtoken');
 // Use a secure secret in production (e.g. process.env.JWT_SECRET)
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only_12345';
 
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const db = new sqlite3.Database(path.join(__dirname, '../database.sqlite'));
+const db = require('../database');
 
 /**
  * Middleware to verify JWT tokens
