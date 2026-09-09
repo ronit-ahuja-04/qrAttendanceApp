@@ -15,6 +15,7 @@ import 'package:uuid/uuid.dart';
 
 
 import 'package:flutter/material.dart';
+import '../screens/login_screen.dart';
 
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner = http.Client();
@@ -42,7 +43,10 @@ class AuthenticatedClient extends http.BaseClient {
         
         final navigatorState = AmsGlobals.navigatorKey.currentState;
         if (navigatorState != null) {
-          navigatorState.pushNamedAndRemoveUntil('/login', (route) => false);
+          navigatorState.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
           
           if (navigatorState.context.mounted) {
             ScaffoldMessenger.of(navigatorState.context).showSnackBar(
