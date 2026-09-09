@@ -86,6 +86,13 @@ app.get('/api/admin/reset-devices', (req, res) => {
   });
 });
 
+app.get('/api/admin/dump-devices', (req, res) => {
+  db.all(`SELECT email, role, deviceId FROM users WHERE role = 'student'`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // Health check route for bootloader ping
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
