@@ -383,7 +383,7 @@ if (process.env.REDIS_URL) {
         const { userId, event } = JSON.parse(message);
         const data = `data: ${JSON.stringify(event)}\n\n`;
         sseClients.forEach(client => {
-          if (!userId || client.userId === userId) {
+          if (!userId || client.userId.toString() === userId.toString()) {
             client.res.write(data);
           }
         });
@@ -396,11 +396,11 @@ if (process.env.REDIS_URL) {
 
 function notifyClients(userId, event) {
   if (pubClient && pubClient.isOpen) {
-    pubClient.publish('sse-events', JSON.stringify({ userId, event }));
+    pubClient.publish('sse-events', JSON.stringify({ userId: userId ? userId.toString() : null, event }));
   } else {
     const data = `data: ${JSON.stringify(event)}\n\n`;
     sseClients.forEach(client => {
-      if (!userId || client.userId === userId) {
+      if (!userId || client.userId.toString() === userId.toString()) {
         client.res.write(data);
       }
     });
