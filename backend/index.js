@@ -98,6 +98,13 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Temporary endpoint to test SSE broadcasting
+app.get('/api/test-sse', (req, res) => {
+  const targetUser = req.query.userId || null;
+  notifyClients(targetUser, { type: 'FORCE_LOGOUT', message: 'Test broadcast from terminal.' });
+  res.json({ success: true, targetUser: targetUser || 'ALL' });
+});
+
 // Global logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
