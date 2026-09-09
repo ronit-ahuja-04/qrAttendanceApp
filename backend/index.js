@@ -559,7 +559,16 @@ app.get('/notifications/stream', (req, res) => {
   const client = { userId, res };
   sseClients.push(client);
 
+  // Initial connection event
+  res.write(`data: {"type": "connected"}\n\n`);
+
+  // Keep-alive ping to prevent proxy/OS silent disconnects
+  const pingInterval = setInterval(() => {
+    res.write(`data: {"type": "ping"}\n\n`);
+  }, 15000);
+
   req.on('close', () => {
+    clearInterval(pingInterval);
     sseClients = sseClients.filter(c => c !== client);
   });
 });
