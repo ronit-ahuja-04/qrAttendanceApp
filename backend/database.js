@@ -176,6 +176,13 @@ db.serialize(() => {
     expiry ${isProduction ? 'TIMESTAMP' : 'DATETIME'}
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )`, () => {
+    // Initialize default lock state as 'false' (unlocked) if it doesn't exist
+    db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('device_registration_locked', 'false')`);
+  });
 
 });
 

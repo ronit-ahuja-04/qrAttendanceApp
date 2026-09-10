@@ -243,6 +243,46 @@ app.post('/update-notification-prefs', (req, res) => {
   });
 });
 
+// Admin endpoints for Device Management (Requires Faculty/Admin)
+app.get('/api/admin/device-lock', (req, res) => {
+  db.get(`SELECT value FROM settings WHERE key = 'device_registration_locked'`, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ locked: row && row.value === 'true' });
+  });
+});
+
+app.post('/api/admin/device-lock', (req, res) => {
+  const { locked } = req.body;
+  if (locked === undefined) return res.status(400).json({ error: 'Missing locked parameter' });
+  
+  const value = locked ? 'true' : 'false';
+  db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('device_registration_locked', ?)`, [value], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, locked });
+  });
+});
+
+app.get('/api/admin/students', (req, res) => {
+  db.all(`SELECT id, name, rollNo, email, deviceId FROM users WHERE role = 'student' ORDER BY rollNo ASC`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/unbind-student', (req, res) => {
+  const { studentId } = req.body;
+  if (!studentId) return res.status(400).json({ error: 'Missing studentId' });
+
+  db.run(`UPDATE users SET deviceId = NULL WHERE id = ?`, [studentId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    // Broadcast FORCE_LOGOUT to kick out the student's old device instantly
+    notifyClients(studentId, { type: 'FORCE_LOGOUT', message: 'Your device binding was reset by the administrator.' });
+    
+    res.json({ success: true, message: 'Student device unbound successfully' });
+  });
+});
+
 // Setup EOD Cron Job for Proxy Approvals (11:59 PM)
 cron.schedule('59 23 * * *', () => {
   console.log('Running EOD Auto-Approval for pending proxy sessions...');
@@ -493,17 +533,24 @@ app.post('/login', loginLimiter, (req, res) => {
     // Check device binding for students
     if (row.role === 'student' && deviceId) {
       if (!row.deviceId) {
-        // Enforce 1-device-to-1-student rule: check if device is already claimed
-        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+        db.get(`SELECT value FROM settings WHERE key = 'device_registration_locked'`, (err, setting) => {
           if (err) return res.status(500).json({ error: err.message });
-          if (existing) {
-            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+          const isLocked = setting ? setting.value === 'true' : false;
+          if (isLocked) {
+             return res.status(403).json({ error: 'New device registrations are currently locked by the admin. Please contact faculty.' });
           }
-          // Bind new device
-          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
-            if (updateErr) return res.status(500).json({ error: 'Failed to bind device' });
-            row.deviceId = deviceId;
-            finalizeLogin();
+          
+          // Enforce 1-device-to-1-student rule: check if device is already claimed
+          db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (existing) {
+              return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+            }
+            db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (err) => {
+              if (err) return res.status(500).json({ error: err.message });
+              row.deviceId = deviceId;
+              finalizeLogin();
+            });
           });
         });
       } else if (row.deviceId !== deviceId) {

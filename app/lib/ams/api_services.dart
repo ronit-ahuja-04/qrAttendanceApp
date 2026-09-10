@@ -30,37 +30,13 @@ void triggerAutoLogout() {
       await prefs.remove('ams_user_session');
     } catch (_) {}
     
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navigatorState = AmsGlobals.navigatorKey.currentState;
-      if (navigatorState != null) {
-        navigatorState.pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-        
-        Future.delayed(const Duration(milliseconds: 100), () {
-          final newContext = AmsGlobals.navigatorKey.currentState?.context;
-          if (newContext != null && newContext.mounted) {
-            showGeneralDialog(
-              context: newContext,
-              barrierDismissible: false,
-              barrierColor: Colors.black87,
-              transitionDuration: const Duration(milliseconds: 400),
-              pageBuilder: (context, anim1, anim2) => const DeviceUnboundDialog(),
-              transitionBuilder: (context, anim1, anim2, child) {
-                return Transform.scale(
-                  scale: Curves.easeOutBack.transform(anim1.value),
-                  child: FadeTransition(
-                    opacity: anim1,
-                    child: child,
-                  ),
-                );
-              },
-            );
-          }
-        });
-      }
-    });
+    final navigatorState = AmsGlobals.navigatorKey.currentState;
+    if (navigatorState != null) {
+      navigatorState.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen(showDeviceUnboundDialog: true)),
+        (route) => false,
+      );
+    }
   });
 }
 
@@ -820,3 +796,62 @@ RejectionReason _parseReason(String? reasonStr) {
     orElse: () => RejectionReason.invalidQrCode,
   );
 }
+
+class ApiAdminService {
+  Future<bool> getDeviceLockStatus() async {
+    try {
+      final response = await httpClient.get(Uri.parse('$baseUrl/api/admin/device-lock'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['locked'] ?? false;
+      }
+      return false;
+    } catch (e) {
+      print('GET DEVICE LOCK ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setDeviceLockStatus(bool locked) async {
+    try {
+      final response = await httpClient.post(
+        Uri.parse('$baseUrl/api/admin/device-lock'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'locked': locked}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('SET DEVICE LOCK ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllStudents() async {
+    try {
+      final response = await httpClient.get(Uri.parse('$baseUrl/api/admin/students'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('GET ALL STUDENTS ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> unbindStudentDevice(String studentId) async {
+    try {
+      final response = await httpClient.post(
+        Uri.parse('$baseUrl/api/admin/unbind-student'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'studentId': studentId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('UNBIND STUDENT ERROR: $e');
+      return false;
+    }
+  }
+}
+

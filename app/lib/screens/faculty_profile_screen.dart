@@ -9,7 +9,7 @@ import 'update_profile_picture_screen.dart';
 import 'change_password_screen.dart';
 import 'faculty_notifications_screen.dart';
 import 'faculty_timetable_manager_screen.dart';
-
+import 'device_management_screen.dart';
 /// Faculty Profile & Digital ID Badge — mirrors the Stitch export
 /// (code.html): circular avatar with camera-edit badge, name, staff ID
 /// pill, department/designation grid, then Account Settings + Logout.
@@ -79,6 +79,18 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                       onTap: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const FacultyTimetableManagerScreen()),
+                        );
+                        _refresh();
+                      },
+                    ),
+                  if (user?.role != 'student') const SizedBox(height: 12),
+                  if (user?.role != 'student')
+                    _SettingsButton(
+                      icon: Icons.devices_other,
+                      label: 'Device Management',
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const DeviceManagementScreen()),
                         );
                         _refresh();
                       },
