@@ -1,0 +1,2656 @@
+require('dotenv').config();
+const axios = require('axios');
+const express = require('express');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+const db = require('./database');
+const multer = require('multer');
+const cron = require('node-cron');
+const path = require('path');
+const fs = require('fs');
+const exceljs = require('exceljs');
+const helmet = require('helmet');
+const redis = require('redis');
+const { authenticateToken, generateToken, requireRole } = require('./middleware/auth');
+const { apiLimiter, loginLimiter, attendanceLimiter } = require('./middleware/rateLimiter');
+const app = express();
+
+// Trust reverse proxy (Render/Cloudflare) to parse X-Forwarded-For correctly for rate limiters
+app.set('trust proxy', 1);
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:56086',
+  'https://vesit-ams.vercel.app',
+  'https://qr-attendance-app.vercel.app'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if(!origin) return callback(null, true);
+    
+    // Allow any localhost port for development
+    if (origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
+    
+    // Allow any vercel deployment and production domains
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
+  },
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'ngrok-skip-browser-warning', 'x-requested-with', 'Accept', 'Cache-Control', 'Pragma', 'Expires']
+}));
+
+app.use(helmet());
+app.use(apiLimiter);
+
+// Helper to format subject names
+function formatSubjectName(name) {
+  if (!name) return name;
+  let cleaned = name.replace(/\s*\(\s*DMBI\s*\)/gi, '').trim();
+  const words = cleaned.split(' ');
+  const lowerCaseWords = ['and', 'or', 'for', 'in', 'of', 'to', 'with', 'a', 'an', 'the'];
+  
+  return words.map((word, idx) => {
+    if (!word) return '';
+    const lowerWord = word.toLowerCase();
+    if (idx > 0 && idx < words.length - 1 && lowerCaseWords.includes(lowerWord)) {
+      return lowerWord;
+    }
+    return word.charAt(0).toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+app.use(express.json());
+
+// Maintenance Mode Middleware
+app.use((req, res, next) => {
+  if (process.env.MAINTENANCE_MODE === 'true') {
+    return res.status(503).json({ 
+      error: 'Service Unavailable', 
+      message: 'The system is currently undergoing maintenance. Please try again later.' 
+    });
+  }
+  next();
+});
+
+app.get('/api/admin/reset-devices', requireRole(['faculty coordinator']), (req, res) => {
+  db.run(`UPDATE users SET deviceId = NULL WHERE role = 'student'`, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    notifyClients(null, { type: 'FORCE_LOGOUT', message: 'Admin has reset all devices.' });
+    res.json({ message: 'All student device bindings have been successfully reset.' });
+  });
+});
+
+app.get('/api/admin/dump-devices', requireRole(['faculty coordinator']), (req, res) => {
+  db.all(`SELECT email, role, deviceId FROM users WHERE role = 'student'`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Health check route for bootloader ping
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Temporary endpoint to test SSE broadcasting
+app.get('/api/test-sse', (req, res) => {
+  const targetUser = req.query.userId || null;
+  notifyClients(targetUser, { type: 'FORCE_LOGOUT', message: 'Test broadcast from terminal.' });
+  res.json({ success: true, targetUser: targetUser || 'ALL' });
+});
+
+// Debug endpoint to list connected SSE clients
+app.get('/api/debug/clients', (req, res) => {
+  res.json({
+    clientCount: sseClients.length,
+    clients: sseClients.map(c => c.userId)
+  });
+});
+
+// Global logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// Global authentication middleware
+app.use((req, res, next) => {
+  // Allow CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
+  const publicPaths = [
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/uploads',
+    '/profile-images'
+  ];
+  
+  if (publicPaths.some(p => req.path.startsWith(p))) {
+    return next();
+  }
+  
+  return authenticateToken(req, res, next);
+});
+
+// Initialize Firebase Admin
+const admin = require('firebase-admin');
+try {
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else if (fs.existsSync('./firebase-service-account.json')) {
+    serviceAccount = require('./firebase-service-account.json');
+  }
+
+  if (serviceAccount) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: 'attendance-monitoring-sy-89218.firebasestorage.app'
+    });
+    console.log('Firebase Admin SDK initialized successfully.');
+  } else {
+    console.warn('Firebase Admin SDK NOT initialized. Missing credentials.');
+  }
+} catch (e) {
+  console.error('Failed to initialize Firebase Admin SDK:', e.message);
+}
+
+// Push Notification Helper
+function sendPushNotification(userId, title, body, payloadData = {}) {
+  // 1. Fetch user's FCM token and prefs from DB
+  db.get(`SELECT fcmToken, notificationPrefs FROM users WHERE id = ?`, [userId], (err, row) => {
+    if (err) {
+      console.error('Failed to fetch fcmToken:', err);
+      return;
+    }
+    if (row && row.fcmToken) {
+      // 2. Filter based on preferences
+      let prefs = {};
+      try {
+        if (row.notificationPrefs) {
+          prefs = JSON.parse(row.notificationPrefs);
+        }
+      } catch (e) {
+        console.error('Error parsing notificationPrefs:', e);
+      }
+      
+      const type = payloadData.type;
+      if (prefs.notif_master === false) {
+        console.log(`Skipping notification for ${userId} (master toggle off)`);
+        return;
+      }
+      
+      // Ensure all data values are strings (required by FCM)
+      const stringifiedData = {};
+      if (payloadData) {
+        for (const [k, v] of Object.entries(payloadData)) {
+          if (v !== undefined && v !== null) {
+            stringifiedData[k] = String(v);
+          }
+        }
+      }
+      stringifiedData['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
+
+      const message = {
+        notification: { title: String(title), body: String(body) },
+        data: stringifiedData,
+        token: row.fcmToken,
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              contentAvailable: true,
+            }
+          }
+        }
+      };
+      
+      admin.messaging().send(message)
+        .then((response) => console.log('Successfully sent FCM message:', response))
+        .catch((error) => console.error('Error sending FCM message:', error));
+    }
+  });
+}
+
+// Update FCM Token Endpoint
+app.post('/update-fcm-token', (req, res) => {
+  const { userId, fcmToken } = req.body;
+  if (!userId || !fcmToken && fcmToken !== '') return res.status(400).json({ error: 'Missing parameters' });
+  
+  db.run(`UPDATE users SET fcmToken = ? WHERE id = ?`, [fcmToken, userId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'FCM Token updated successfully' });
+  });
+});
+
+// Update Notification Preferences
+app.post('/update-notification-prefs', (req, res) => {
+  const { userId, prefs } = req.body; // prefs is an object
+  if (!userId || !prefs) return res.status(400).json({ error: 'Missing parameters' });
+  
+  db.run(`UPDATE users SET notificationPrefs = ? WHERE id = ?`, [JSON.stringify(prefs), userId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Notification preferences updated successfully' });
+  });
+});
+
+// Admin endpoints for Device Management (Requires Faculty/Admin)
+app.get('/api/admin/device-lock', requireRole(['faculty coordinator']), (req, res) => {
+  db.get(`SELECT value FROM settings WHERE key = 'device_registration_locked'`, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ locked: row && row.value === 'true' });
+  });
+});
+
+app.post('/api/admin/device-lock', requireRole(['faculty coordinator']), (req, res) => {
+  const { locked } = req.body;
+  if (locked === undefined) return res.status(400).json({ error: 'Missing locked parameter' });
+  
+  const value = locked ? 'true' : 'false';
+  db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('device_registration_locked', ?)`, [value], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, locked });
+  });
+});
+
+app.get('/api/admin/students', requireRole(['faculty coordinator']), (req, res) => {
+  db.all(`SELECT id, name, rollNo, email, deviceId FROM users WHERE role = 'student' ORDER BY rollNo ASC`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/unbind-student', requireRole(['faculty coordinator']), (req, res) => {
+  const { studentId } = req.body;
+  if (!studentId) return res.status(400).json({ error: 'Missing studentId' });
+
+  db.run(`UPDATE users SET deviceId = NULL WHERE id = ?`, [studentId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    // Broadcast FORCE_LOGOUT to kick out the student's old device instantly
+    notifyClients(studentId, { type: 'FORCE_LOGOUT', message: 'Your device binding was reset by the administrator.' });
+    
+    res.json({ success: true, message: 'Student device unbound successfully' });
+  });
+});
+
+app.get('/api/admin/faculty', requireRole(['faculty coordinator']), (req, res) => {
+  db.all(`SELECT id, name, email, role FROM users WHERE role = 'faculty' ORDER BY name ASC`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/api/admin/scopes', requireRole(['faculty coordinator']), (req, res) => {
+  db.all(`SELECT * FROM timetable_slots`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/scopes', requireRole(['faculty coordinator']), (req, res) => {
+  const { facultyId, subject, batchTarget, type } = req.body;
+  if (!facultyId || !subject) return res.status(400).json({ error: 'Missing parameters' });
+  const id = require('crypto').randomUUID();
+  db.run(`INSERT INTO timetable_slots (id, facultyId, subject, type, batchTarget) VALUES (?, ?, ?, ?, ?)`, 
+    [id, facultyId, subject, type || 'Lecture', batchTarget || ''], 
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id });
+  });
+});
+
+app.delete('/api/admin/scopes/:id', requireRole(['faculty coordinator']), (req, res) => {
+  db.run(`DELETE FROM timetable_slots WHERE id = ?`, [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Setup EOD Cron Job for Proxy Approvals (11:59 PM)
+cron.schedule('59 23 * * *', () => {
+  console.log('Running EOD Auto-Approval for pending proxy sessions...');
+  db.all(`SELECT id, courseCode, facultyId, proxyFacultyId FROM sessions WHERE approvalStatus = 'pending'`, [], (err, sessions) => {
+    if (err) return console.error('EOD query error:', err.message);
+    if (!sessions || sessions.length === 0) return console.log('No pending proxy sessions found for EOD auto-approval.');
+    
+    sessions.forEach(session => {
+      db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE id = ?`, [session.id], function(updateErr) {
+        if (updateErr) return console.error('EOD update error:', updateErr.message);
+        
+        const now = new Date().toISOString();
+        const facTitle = 'Proxy Auto-Approved (Timeout)';
+        const facBody = `The pending proxy session for ${formatSubjectName(session.courseCode)} was auto-approved because it was not resolved by midnight.`;
+        
+        // Notify original faculty
+        db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [uuidv4(), session.facultyId, facTitle, facBody, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'schedule', now]);
+        sendPushNotification(session.facultyId, facTitle, facBody, { type: 'PROXY_AUTO_APPROVED' });
+
+        // Notify proxy faculty
+        if (session.proxyFacultyId) {
+          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), session.proxyFacultyId, facTitle, facBody, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'schedule', now]);
+          sendPushNotification(session.proxyFacultyId, facTitle, facBody, { type: 'PROXY_AUTO_APPROVED' });
+        }
+
+        // Notify enrolled students
+        db.get('SELECT name FROM users WHERE id = ?', [session.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : session.facultyId;
+          db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ? AND status = ?', [session.id, 'present'], (err, students) => {
+            if (students && students.length > 0) {
+              const sTitle = 'Attendance Verified (Auto)';
+              const sBody = `Attendance marked for lecture ${formatSubjectName(session.courseCode)} of faculty ${facName}.`;
+              const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+              students.forEach(s => {
+                notifStmt.run(uuidv4(), s.studentId, sTitle, sBody, 'PRESENT', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now);
+                sendPushNotification(s.studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: s.status, isPending: 'false' });
+              });
+              notifStmt.finalize();
+            }
+          });
+        });
+      });
+    });
+    console.log(`EOD Auto-approval initiated for ${sessions.length} sessions.`);
+  });
+}, {
+  scheduled: true,
+  timezone: "Asia/Kolkata"
+});
+
+// Setup Automated Lecture Reminder (runs every minute)
+cron.schedule('* * * * *', () => {
+  const now = new Date();
+  
+  // Convert now to Asia/Kolkata timezone to match the local schedule
+  const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+  const target = new Date(now.getTime() + 10 * 60000); // 10 minutes in the future
+  
+  const formatter = new Intl.DateTimeFormat('en-US', options);
+  const parts = formatter.formatToParts(target);
+  let hours = parts.find(p => p.type === 'hour').value;
+  if (hours === '24') hours = '00';
+  const minutes = parts.find(p => p.type === 'minute').value;
+  const timeStr = `${hours}:${minutes}`;
+  
+  // We need to get the day in Asia/Kolkata timezone
+  const localDayParts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }).formatToParts(target);
+  const dayStr = localDayParts.find(p => p.type === 'weekday').value;
+  
+  db.all('SELECT * FROM timetable_slots WHERE day = ? AND startTime = ?', [dayStr, timeStr], (err, rows) => {
+    if (err) return console.error('Cron timetable error:', err);
+    if (!rows || rows.length === 0) return;
+
+    rows.forEach(slot => {
+      // 1. Notify Faculty
+      const facultyTitle = 'Upcoming Lecture';
+      const facultyBody = `Your ${slot.type} for ${slot.subject} starts in 10 minutes at ${slot.venue}.`;
+      db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [uuidv4(), slot.facultyId, facultyTitle, facultyBody, 'Reminder', 'primaryContainer', 'onPrimaryContainer', 'System', 'alarm', new Date().toISOString()]);
+      sendPushNotification(slot.facultyId, facultyTitle, facultyBody, { type: 'TIMETABLE_UPDATED' }); // using TIMETABLE_UPDATED type to respect 'notif_alerts'
+
+      // 2. Notify Students
+      db.all('SELECT id, division, coreBatch, electiveBatch FROM users WHERE role = \'student\'', [], (err, students) => {
+        if (err || !students) return;
+        
+        const targetStudents = students.filter(s => {
+           // Ensure division matches
+           if (!s.division || !slot.batchTarget.includes(s.division)) return false;
+           
+           if (slot.batchTarget.includes('All')) return true;
+           
+           if (s.coreBatch && slot.batchTarget.includes(s.coreBatch)) return true;
+           if (s.electiveBatch && slot.batchTarget.includes(s.electiveBatch)) return true;
+           
+           return false;
+        });
+
+        targetStudents.forEach(student => {
+          const studentTitle = 'Upcoming Class';
+          const studentBody = `${slot.subject} starts in 10 minutes at ${slot.venue}.`;
+          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), student.id, studentTitle, studentBody, 'Reminder', 'secondaryContainer', 'onSecondaryContainer', 'System', 'alarm', new Date().toISOString()]);
+          sendPushNotification(student.id, studentTitle, studentBody, { type: 'TIMETABLE_UPDATED' });
+        });
+      });
+    });
+  });
+});
+
+// Ensure uploads dir exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Multer config
+const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  }
+});
+
+let sseClients = [];
+
+let pubClient = null;
+let subClient = null;
+
+if (process.env.REDIS_URL) {
+  pubClient = redis.createClient({ url: process.env.REDIS_URL });
+  subClient = pubClient.duplicate();
+
+  pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
+  subClient.on('error', (err) => console.error('Redis Sub Error:', err));
+
+  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    console.log('Redis connected for SSE Pub/Sub');
+    
+    subClient.subscribe('sse-events', (message) => {
+      try {
+        const { userId, event } = JSON.parse(message);
+        const data = `data: ${JSON.stringify(event)}\n\n`;
+        sseClients.forEach(client => {
+          if (!userId || client.userId.toString() === userId.toString()) {
+            client.res.write(data);
+          }
+        });
+      } catch (e) {
+        console.error('Error processing Redis message:', e);
+      }
+    });
+  }).catch(e => console.error('Failed to connect to Redis:', e));
+}
+
+function notifyClients(userId, event) {
+  if (pubClient && pubClient.isOpen) {
+    pubClient.publish('sse-events', JSON.stringify({ userId: userId ? userId.toString() : null, event }));
+  } else {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    sseClients.forEach(client => {
+      if (!userId || client.userId.toString() === userId.toString()) {
+        client.res.write(data);
+      }
+    });
+  }
+}
+
+// Utilities
+function generateQrCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function formatProfilePictureUrl(url, userId) {
+  if (!url) return url;
+  
+  const baseUrl = process.env.BASE_URL || 'https://qr-attendance-api-wvvs.onrender.com';
+  
+  if (url.startsWith('data:')) {
+    return `${baseUrl}/profile-images/${userId}`;
+  } else if (url.startsWith('/uploads')) {
+    return `${baseUrl}${url}`;
+  }
+  return url;
+}
+
+app.get('/profile-images/:id', (req, res) => {
+  const userId = req.params.id;
+  db.get('SELECT profilePictureUrl FROM users WHERE id = ?', [userId], (err, row) => {
+    if (err) return res.status(500).send(err.message);
+    if (!row || !row.profilePictureUrl) {
+      return res.redirect('https://ui-avatars.com/api/?name=User&background=random');
+    }
+    const url = row.profilePictureUrl;
+    if (url.startsWith('data:')) {
+      const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return res.status(500).send('Invalid base64 string');
+      res.set('Content-Type', matches[1]);
+      res.send(Buffer.from(matches[2], 'base64'));
+    } else if (url.startsWith('http') || url.startsWith('/uploads')) {
+      res.redirect(url);
+    } else {
+      res.redirect('https://ui-avatars.com/api/?name=User&background=random');
+    }
+  });
+});
+
+app.post('/login', loginLimiter, (req, res) => {
+  const { email, password, deviceId } = req.body;
+  console.log('Login attempt:', email, password);
+  db.get(`SELECT id, role, name, rollNo, email, profilePictureUrl, division, coreBatch, electiveSubject, electiveBatch, deviceId FROM users WHERE LOWER(email) = LOWER(?) AND password = ?`, [email, password], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // Helper function to finalize login
+    const finalizeLogin = () => {
+      row.branch = 'INFT'; // Hardcode branch for now as per user request
+      row.profilePictureUrl = formatProfilePictureUrl(row.profilePictureUrl, row.id);
+
+      if (row.role === 'faculty' || row.role === 'faculty coordinator') {
+        db.all(`SELECT DISTINCT subject, batchTarget, type FROM timetable_slots WHERE facultyId = ?`, [row.id], (err, scopes) => {
+          if (err) {
+            console.error("Error fetching scopes:", err);
+            row.scopes = [];
+          } else {
+            row.scopes = scopes;
+          }
+          row.token = generateToken(row);
+          res.json(row);
+        });
+      } else {
+        row.token = generateToken(row);
+        res.json(row);
+      }
+    };
+
+    // Check device binding for students
+    if (row.role === 'student' && deviceId) {
+      if (!row.deviceId) {
+        db.get(`SELECT value FROM settings WHERE key = 'device_registration_locked'`, (err, setting) => {
+          if (err) return res.status(500).json({ error: err.message });
+          const isLocked = setting ? setting.value === 'true' : false;
+          if (isLocked) {
+             return res.status(403).json({ error: 'New device registrations are currently locked by the admin. Please contact faculty.' });
+          }
+          
+          // Enforce 1-device-to-1-student rule: check if device is already claimed
+          db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (existing) {
+              return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+            }
+            db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (err) => {
+              if (err) return res.status(500).json({ error: err.message });
+              row.deviceId = deviceId;
+              finalizeLogin();
+            });
+          });
+        });
+      } else if (row.deviceId !== deviceId) {
+        // Mismatch: Gracefully shift login to new device
+        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
+          if (err) return res.status(500).json({ error: err.message });
+          if (existing) {
+            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+          }
+          
+          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
+            if (updateErr) return res.status(500).json({ error: 'Failed to bind new device' });
+            
+            // Broadcast FORCE_LOGOUT to kick out the old device instantly
+            notifyClients(row.id, { type: 'FORCE_LOGOUT', message: 'Your account was logged in from another device.' });
+            
+            row.deviceId = deviceId;
+            finalizeLogin();
+          });
+        });
+      } else {
+        // Matches successfully
+        finalizeLogin();
+      }
+    } else {
+      // Faculty or no deviceId provided (shouldn't happen with updated app)
+      finalizeLogin();
+    }
+  });
+});
+
+app.delete('/users/:id/profile-picture', async (req, res) => {
+  const userId = req.params.id;
+  db.run(`UPDATE users SET profilePictureUrl = NULL WHERE id = ?`, [userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: "Profile picture removed successfully", profilePictureUrl: null });
+  });
+});
+
+app.post('/users/:id/profile-picture', upload.single('profilePicture'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file provided or invalid format.' });
+
+  const userId = req.params.id;
+  let url;
+
+  if (!req.file.buffer) {
+    return res.status(500).json({ error: "Memory storage not configured correctly." });
+  }
+
+  // Bypass Firebase Storage completely to avoid Blaze plan requirements.
+  // Save directly as a highly compressed Base64 Data URI in the Turso database.
+  const base64Data = req.file.buffer.toString('base64');
+  const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
+  
+  db.run(`UPDATE users SET profilePictureUrl = ? WHERE id = ?`, [dataUri, userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ profilePictureUrl: formatProfilePictureUrl(dataUri, userId) });
+  });
+});
+
+app.get('/notifications/stream', (req, res) => {
+  const userId = req.query.userId;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const client = { userId, res };
+  sseClients.push(client);
+
+  // Initial connection event
+  res.write(`data: {"type": "connected"}\n\n`);
+
+  // Keep-alive ping to prevent proxy/OS silent disconnects
+  const pingInterval = setInterval(() => {
+    res.write(`data: {"type": "ping"}\n\n`);
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    sseClients = sseClients.filter(c => c !== client);
+  });
+});
+
+// Global Authentication Middleware
+app.use((req, res, next) => {
+  const publicPaths = [
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/change-password',
+    '/timetable',
+    '/api/debug/sessions'
+  ];
+  if (publicPaths.includes(req.path) || req.path.startsWith('/users/') || req.path.startsWith('/notifications/stream')) {
+    return next();
+  }
+  return authenticateToken(req, res, next);
+});
+
+function getSessionTargetStudents(courseCode, batchTarget) {
+  let whereClause = "role = 'student'";
+  const target = batchTarget || '';
+  const course = (courseCode || '').toLowerCase();
+
+  const isAdmt = target.includes('ADMT') || course.includes('database') || course.includes('admt') || course.includes('advance database');
+  const isSoft = target.includes('Soft') || target.includes('soft') || course.includes('soft');
+  const isCrossDivision = target.startsWith('TE -'); // e.g. "TE - ADMT (Batch A)"
+
+  if (isAdmt) {
+    whereClause += " AND (electiveSubject = 'Advanced Database Management Technologies' OR electiveSubject = 'ADMT')";
+    if (target.includes('Batch A')) whereClause += " AND electiveBatch = 'Batch A'";
+    else if (target.includes('Batch B')) whereClause += " AND electiveBatch = 'Batch B'";
+    else if (target.includes('Batch C')) whereClause += " AND electiveBatch = 'Batch C'";
+    // If division-specific (lab), also filter by division
+    if (!isCrossDivision) {
+      if (target.includes('D15A')) whereClause += " AND division = 'D15A'";
+      else if (target.includes('D15B')) whereClause += " AND division = 'D15B'";
+      else if (target.includes('D15C')) whereClause += " AND division = 'D15C'";
+    }
+  } else if (isSoft) {
+    whereClause += " AND electiveSubject = 'Soft Computing'";
+    if (target.includes('Batch A')) whereClause += " AND electiveBatch = 'Batch A'";
+    else if (target.includes('Batch B')) whereClause += " AND electiveBatch = 'Batch B'";
+    else if (target.includes('Batch C')) whereClause += " AND electiveBatch = 'Batch C'";
+    // If division-specific (lab), also filter by division
+    if (!isCrossDivision) {
+      if (target.includes('D15A')) whereClause += " AND division = 'D15A'";
+      else if (target.includes('D15B')) whereClause += " AND division = 'D15B'";
+      else if (target.includes('D15C')) whereClause += " AND division = 'D15C'";
+    }
+  } else {
+    // Standard Lectures / Core Labs — Batch = coreBatch (roll-number based)
+    if (target.includes('D15A')) whereClause += " AND division = 'D15A'";
+    else if (target.includes('D15B')) whereClause += " AND division = 'D15B'";
+    else if (target.includes('D15C')) whereClause += " AND division = 'D15C'";
+
+    if (target.includes('Batch A')) whereClause += " AND coreBatch = 'Batch A'";
+    else if (target.includes('Batch B')) whereClause += " AND coreBatch = 'Batch B'";
+    else if (target.includes('Batch C')) whereClause += " AND coreBatch = 'Batch C'";
+  }
+  return whereClause;
+}
+
+
+// Create Smart Seminar Session
+app.post('/sessions/smart-seminar', (req, res) => {
+  const { proxyFacultyId, divisions, startTime, endTime, date } = req.body;
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+
+  // We store the smart seminar in sessions but with a special courseCode
+  // so the QR generator and mark-attendance logic can identify it.
+  db.run(`INSERT INTO sessions (id, courseCode, facultyId, proxyFacultyId, status, enrolledStudentIds, createdAt, approvalStatus, metadata)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, 'Smart Seminar', proxyFacultyId, proxyFacultyId, 'scheduled', JSON.stringify([]), now, 'approved', JSON.stringify({
+      divisions,
+      startTime,
+      endTime,
+      date
+    })],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id, courseCode: 'Smart Seminar', facultyId: proxyFacultyId, status: 'scheduled', createdAt: now });
+    }
+  );
+});
+
+app.post('/sessions/bulk', async (req, res) => {
+  const { proxyFacultyId, targets } = req.body;
+  if (!targets || !Array.isArray(targets) || targets.length === 0) {
+    return res.status(400).json({ error: 'No targets provided' });
+  }
+
+  const groupId = uuidv4();
+  const now = new Date().toISOString();
+
+  try {
+    const results = [];
+    for (const t of targets) {
+      const scopeFacultyId = t.originalFacultyId || t.facultyId;
+      let baseSubject = t.courseCode;
+      if (baseSubject.endsWith(' - Lab')) baseSubject = baseSubject.slice(0, -6);
+      if (baseSubject.endsWith(' - Lecture')) baseSubject = baseSubject.slice(0, -10);
+
+      // Verify scope
+      const scope = await new Promise((resolve, reject) => {
+        db.get('SELECT 1 FROM timetable_slots WHERE facultyId = ? AND subject = ? AND batchTarget = ?', [scopeFacultyId, baseSubject, t.batchTarget], (err, row) => {
+          if (err) return reject(err);
+          resolve(row);
+        });
+      });
+
+      if (!scope) {
+        return res.status(403).json({ error: 'Scope mismatch', message: 'One or more selected faculties are not assigned to their subjects.' });
+      }
+
+      const whereClause = getSessionTargetStudents(t.courseCode, t.batchTarget);
+      const rows = await new Promise((resolve, reject) => {
+        db.all('SELECT id FROM users WHERE ' + whereClause, [], (err, r) => {
+          if (err) return reject(err);
+          resolve(r);
+        });
+      });
+
+      const enrolledIds = rows.map(r => r.id);
+      const id = uuidv4();
+
+      await new Promise((resolve, reject) => {
+        db.run('INSERT INTO sessions (id, courseCode, facultyId, proxyFacultyId, status, enrolledStudentIds, createdAt, approvalStatus, groupId, batchTarget) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, t.courseCode, scopeFacultyId, proxyFacultyId, 'scheduled', JSON.stringify(enrolledIds), now, 'pending', groupId, t.batchTarget],
+          function (err) {
+            if (err) return reject(err);
+            resolve();
+          }
+        );
+      });
+      results.push({ id, courseCode: t.courseCode, facultyId: scopeFacultyId });
+    }
+    res.json({ id: groupId, type: 'seminar', targets: results, createdAt: now });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/sessions', (req, res) => {
+  const { courseCode, facultyId, batchTarget, isProxy, originalFacultyId, creditToProxy, autoApprove, slotId, metadata } = req.body;
+
+  // For scope checking, always use originalFacultyId if proxy
+  const scopeFacultyId = (isProxy && originalFacultyId) ? originalFacultyId : facultyId;
+  const proxyFacultyId = isProxy ? facultyId : null;
+
+
+  // Strip " - Lab" or " - Lecture" from courseCode to match timetable_slots
+  let baseSubject = courseCode;
+  if (baseSubject.endsWith(' - Lab')) baseSubject = baseSubject.slice(0, -6);
+  if (baseSubject.endsWith(' - Lecture')) baseSubject = baseSubject.slice(0, -10);
+
+  // Scope validation against timetable (using original faculty's scopes for proxy)
+  db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND subject = ? AND batchTarget = ?`, [scopeFacultyId, baseSubject, batchTarget], (err, scope) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!scope) return res.status(403).json({ error: 'Scope mismatch', message: 'This faculty is not assigned to teach this subject to this batch.' });
+
+    const createSession = () => {
+      const id = uuidv4();
+      const now = new Date().toISOString();
+
+    let whereClause = getSessionTargetStudents(courseCode, batchTarget);
+
+    db.all(`SELECT id FROM users WHERE ${whereClause}`, [], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const enrolledIds = rows.map(r => r.id);
+      
+      let finalFacultyId = scopeFacultyId;
+      let approvalStatus = isProxy ? 'pending' : 'approved';
+      
+      if (isProxy) {
+        if (creditToProxy) {
+          finalFacultyId = proxyFacultyId;
+          approvalStatus = 'approved';
+          insertSession();
+        } else {
+          // Check for Seminars or Labs
+          const isSeminar = courseCode.toLowerCase().includes('seminar') || (batchTarget && batchTarget.includes(','));
+          const isLab = courseCode.toLowerCase().endsWith(' - lab');
+          
+          if (isSeminar || isLab || autoApprove) {
+            approvalStatus = 'approved';
+            insertSession(isSeminar);
+          } else {
+            // Lecture Rule: Check if proxy faculty teaches ANY subject to this division
+            let baseDivision = batchTarget || '';
+            if (baseDivision.includes(' - ')) {
+              baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
+            }
+            db.get(`SELECT 1 FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, [proxyFacultyId, `%${baseDivision}%`], (err, teachesDiv) => {
+              if (err) return res.status(500).json({ error: err.message });
+              if (!teachesDiv) {
+                approvalStatus = 'approved'; // They don't teach this division at all -> Auto Approve
+              }
+              insertSession(false);
+            });
+          }
+        }
+      } else {
+        insertSession(false);
+      }
+
+      function insertSession(isSeminar = false) {
+        db.run(`INSERT INTO sessions (id, courseCode, facultyId, proxyFacultyId, status, enrolledStudentIds, createdAt, approvalStatus, batchTarget, slotId, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, courseCode, finalFacultyId, proxyFacultyId, 'scheduled', JSON.stringify(enrolledIds), now, approvalStatus, batchTarget, slotId || null, metadata ? JSON.stringify(metadata) : null],
+          function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Removed PROXY_SLOT_CANCELLED logic as per user request
+            res.json({ id, courseCode, facultyId: finalFacultyId, proxyFacultyId, status: 'scheduled', enrolledStudentIds: enrolledIds, createdAt: now, approvalStatus });
+          }
+        );
+      }
+    }); // end db.all
+  }; // end createSession
+
+    if (slotId) {
+      const todayStart = new Date();
+      todayStart.setHours(0,0,0,0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23,59,59,999);
+
+      const checkQuery = `SELECT * FROM sessions WHERE slotId = ? AND createdAt >= ? AND createdAt <= ? LIMIT 1`;
+        
+      db.get(checkQuery, [slotId, todayStart.toISOString(), todayEnd.toISOString()], (err, existingSession) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (existingSession) {
+          // Check if session is completed, active, scheduled
+          return res.json(existingSession);
+        }
+        createSession();
+      });
+    } else {
+      createSession();
+    }
+  });
+});
+
+// 4) Start Session (generates pre-fetched QR codes)
+app.post('/api/sessions/:id/start', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  const { totalSessionSeconds } = req.body;
+  const now = new Date();
+  const sessionLength = totalSessionSeconds || 30; // default to 30 if missing
+  const qrCodesCount = Math.ceil(sessionLength / 2); // 2-second TTL
+  
+  const qrCodes = [];
+  for (let i = 0; i < qrCodesCount; i++) {
+    const validFrom = new Date(now.getTime() + (i * 2000));
+    const validTo = new Date(now.getTime() + ((i + 1) * 2000));
+    qrCodes.push({
+      code: generateQrCode(),
+      validFrom: validFrom.toISOString(),
+      expiresAt: validTo.toISOString()
+    });
+  }
+
+  // Update status, set the first QR as active for backward compatibility, and store the array in metadata
+  db.get(`SELECT metadata FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    let metadata = {};
+    if (row && row.metadata) {
+      try { metadata = JSON.parse(row.metadata); } catch(e) {}
+    }
+    metadata.qrCodes = qrCodes;
+    
+    // Set first QR code to qrCode column for fallback/compat
+    const firstQr = qrCodes[0];
+    
+    db.run(`UPDATE sessions SET status = 'active', qrCode = ?, qrIssuedAt = ?, qrExpiresAt = ?, metadata = ? WHERE id = ? OR groupId = ?`,
+      [firstQr.code, firstQr.validFrom, firstQr.expiresAt, JSON.stringify(metadata), id, id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        db.get(`SELECT * FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, updatedRow) => {
+          if (err || !updatedRow) return res.status(500).json({ error: 'Not found' });
+          // Send back the first QR in the old format, PLUS the full metadata
+          updatedRow.qrCode = { code: updatedRow.qrCode, issuedAt: updatedRow.qrIssuedAt, expiresAt: updatedRow.qrExpiresAt };
+          res.json(updatedRow);
+        });
+      }
+    );
+  });
+});
+
+// 4.1) Approve Proxy Session
+app.put('/api/sessions/:id/approve', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params;
+  db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE id = ?`, [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Session not found' });
+    
+    // Auto-finalize any pending records for this session before notifying
+    db.run(`UPDATE attendance_records SET status = 'present' WHERE sessionId = ? AND status = 'pending'`, [id], function (err) {
+      // Notify proxy faculty that their session was approved
+      db.get('SELECT proxyFacultyId, courseCode, facultyId, enrolledStudentIds FROM sessions WHERE id = ?', [id], (err, row) => {
+        if (row && row.proxyFacultyId) {
+          db.get('SELECT name FROM users WHERE id = ?', [row.facultyId], (err, fac) => {
+             const facName = fac ? fac.name : row.facultyId;
+             const now = new Date().toISOString();
+             const title = 'Proxy Approved';
+             const body = `${facName} approved your proxy session for ${row.courseCode}.`;
+             db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+               [uuidv4(), row.proxyFacultyId, title, body, 'Approved', 'primaryContainer', 'onPrimaryContainer', facName, 'check_circle', now]);
+             sendPushNotification(row.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
+
+             db.get('SELECT name FROM users WHERE id = ?', [row.proxyFacultyId], (err, pFac) => {
+                const proxyName = pFac ? pFac.name : row.proxyFacultyId;
+                // Notify all enrolled students of their final attendance status
+                const enrolledIds = JSON.parse(row.enrolledStudentIds || '[]');
+                if (enrolledIds.length > 0) {
+                  db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [id], (err, records) => {
+                    const statusMap = {};
+                    if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+                    
+                    const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    enrolledIds.forEach(studentId => {
+                      const status = statusMap[studentId] || 'absent';
+                      const isPresent = (status === 'present');
+                      const sTitle = 'Proxy Session Verified';
+                      const sBody = `The proxy lecture ${row.courseCode} by faculty ${proxyName} has been verified by ${facName}. You were marked ${status.toUpperCase()}.`;
+                      const tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                      const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                      const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
+                      
+                      notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                      sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
+                    });
+                    notifStmt.finalize();
+                  });
+                }
+             });
+          });
+        }
+      });
+      
+      res.json({ success: true, message: 'Session approved successfully' });
+    });
+  });
+});
+
+// 4.2) Decline Proxy Session
+app.put('/api/sessions/:id/decline', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT proxyFacultyId, facultyId, courseCode, batchTarget, enrolledStudentIds FROM sessions WHERE id = ?', [id], (err, sessionRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!sessionRow) return res.status(404).json({ error: 'Session not found' });
+    
+    // Check if it is a Lab or Lecture based on batchTarget
+    const isLab = sessionRow.batchTarget && sessionRow.batchTarget.includes('Batch');
+    let baseDivision = sessionRow.batchTarget || '';
+    if (baseDivision.includes(' - ')) {
+      baseDivision = baseDivision.split(' - ')[0]; // e.g. "D15A - Batch C" -> "D15A"
+    }
+    
+    if (isLab) {
+      // Labs always default credit to Original Faculty on decline
+      finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
+    } else {
+      // Lectures: Check what subject proxy faculty teaches to this class division (as a lecturer)
+      db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? AND batchTarget = ? LIMIT 1`,
+        [sessionRow.proxyFacultyId, `${baseDivision} - All`], 
+        (err, row) => {
+          if (row) {
+            // Proxy teaches this subject to this class, so credit goes to Proxy with THEIR subject
+            finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, row.subject, sessionRow.courseCode);
+          } else {
+            // Fallback: Find a subject the proxy teaches to THIS division (e.g. a lab)
+            db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? AND batchTarget LIKE ? LIMIT 1`, 
+              [sessionRow.proxyFacultyId, `%${baseDivision}%`], 
+              (err, divRow) => {
+              if (divRow) {
+                finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, divRow.subject, sessionRow.courseCode);
+              } else {
+                // Fallback: Find ANY subject the proxy teaches to give them credit
+                db.get(`SELECT subject FROM timetable_slots WHERE facultyId = ? LIMIT 1`, [sessionRow.proxyFacultyId], (err, anyRow) => {
+                  if (anyRow) {
+                    finalizeDecline(id, sessionRow, sessionRow.proxyFacultyId, anyRow.subject, sessionRow.courseCode);
+                  } else {
+                    // Proxy has no subjects assigned at all, default to Original Faculty
+                    finalizeDecline(id, sessionRow, sessionRow.facultyId, sessionRow.courseCode);
+                  }
+                });
+              }
+            });
+          }
+      });
+    }
+  });
+
+  function finalizeDecline(sessionId, sessionRow, finalCreditId, finalCourseCode, originalCourseCode = null) {
+    db.run(`UPDATE sessions SET facultyId = ?, courseCode = ?, approvalStatus = 'approved' WHERE id = ?`, [finalCreditId, finalCourseCode, sessionId], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      // Auto-finalize any pending records for this session before notifying
+      db.run(`UPDATE attendance_records SET status = 'present' WHERE sessionId = ? AND status = 'pending'`, [sessionId], function(err) {
+        
+        const now = new Date().toISOString();
+        db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, facA) => {
+           const facNameA = facA ? facA.name : sessionRow.facultyId;
+           const title = 'Proxy Declined';
+           const body = `${facNameA} declined the proxy for ${sessionRow.courseCode}.`;
+           db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Declined', 'tertiaryContainer', 'onTertiaryContainer', facNameA, 'undo', now]);
+           sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_DECLINED' });
+
+           // Notify all enrolled students that their attendance is verified
+           const enrolledIds = JSON.parse(sessionRow.enrolledStudentIds || '[]');
+           if (enrolledIds.length > 0) {
+             const isProxyCredit = finalCreditId === sessionRow.proxyFacultyId;
+             
+             db.get('SELECT name FROM users WHERE id = ?', [finalCreditId], (err, finalFac) => {
+               const finalFacName = finalFac ? finalFac.name : finalCreditId;
+               
+               db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [sessionId], (err, records) => {
+                 const statusMap = {};
+                 if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+                 
+                 const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                 enrolledIds.forEach(studentId => {
+                   const status = statusMap[studentId] || 'absent';
+                   const isPresent = (status === 'present');
+                   const statusStr = status.toUpperCase();
+                   
+                   let sTitle, sBody, tagText;
+                   
+                   if (isProxyCredit && originalCourseCode) {
+                     sTitle = 'Proxy Verified';
+                     sBody = `Proxy lecture verified. Proxied by faculty ${finalFacName} for their subject ${finalCourseCode} in return for ${facNameA}'s lecture ${originalCourseCode}. You were marked ${statusStr}.`;
+                     tagText = isPresent ? 'PRESENT (Proxy)' : 'ABSENT (Proxy)';
+                   } else {
+                     sTitle = 'Proxy Verified (Declined)';
+                     sBody = `Proxy lecture was declined by ${facNameA}. Attendance recorded for lecture ${finalCourseCode} of faculty ${finalFacName}. You were marked ${statusStr}.`;
+                     tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                   }
+                   
+                   const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                   const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
+                   
+                   notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                   sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
+                 });
+                 notifStmt.finalize();
+               });
+             });
+           }
+        });
+        
+        res.json({ success: true, message: 'Session declined successfully' });
+      });
+    });
+  }
+});
+
+// Removed /reject route completely as per user request
+
+// 5) Rotate QR Code
+app.post('/api/sessions/:id/rotate-qr', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  const { validitySeconds = 4 } = req.body;
+
+  const now = new Date();
+  const issuedAt = now;
+  const expiresAt = new Date(now.getTime() + (validitySeconds * 1000));
+  const qrCode = generateQrCode();
+
+  db.run(`UPDATE sessions SET previousQrCode = qrCode, qrCode = ?, qrIssuedAt = ?, qrExpiresAt = ? WHERE id = ? OR groupId = ?`,
+    [qrCode, issuedAt.toISOString(), expiresAt.toISOString(), id, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      db.get(`SELECT * FROM sessions WHERE id = ? OR groupId = ? LIMIT 1`, [id, id], (err, row) => {
+        if (err || !row) return res.status(500).json({ error: 'Not found' });
+        row.qrCode = { code: row.qrCode, issuedAt: row.qrIssuedAt, expiresAt: row.qrExpiresAt };
+        res.json(row);
+      });
+    }
+  );
+});
+
+// 6) Close Session
+app.post('/api/sessions/:id/close', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  
+  db.get('SELECT * FROM sessions WHERE id = ?', [id], (err, session) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!session) return res.status(404).json({ error: 'Not found' });
+
+    db.run(`UPDATE sessions SET status = 'closed', qrCode = NULL, qrIssuedAt = NULL, qrExpiresAt = NULL WHERE id = ?`,
+      [id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      }
+    );
+  });
+});
+
+// 7) Get Active Session Info (poll for UI)
+app.get('/api/sessions/:id', requireRole(['faculty']), (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  db.get(`SELECT * FROM sessions WHERE id = ?`, [id], (err, row) => {
+    if (err || !row) return res.status(404).json({ error: 'Not found' });
+    if (row.qrCode) {
+      row.qrCode = { code: row.qrCode, issuedAt: row.qrIssuedAt, expiresAt: row.qrExpiresAt };
+    }
+    res.json(row);
+  });
+});
+
+app.get('/sessions/active/:courseCode', (req, res) => {
+  const courseCode = req.params.courseCode;
+  db.get(`SELECT * FROM sessions WHERE courseCode = ? AND status = 'active'`, [courseCode], (err, row) => {
+    if (err || !row) return res.status(404).json({ message: 'No active session' });
+    row.enrolledStudentIds = JSON.parse(row.enrolledStudentIds);
+    if (row.otpCode) {
+      row.otp = { code: row.otpCode, issuedAt: row.otpIssuedAt, expiresAt: row.otpExpiresAt };
+    }
+    res.json(row);
+  });
+});
+
+// 8) Get My Sessions (Faculty)
+app.get('/api/sessions/faculty/:facultyId', requireRole(['faculty']), (req, res) => {
+  const query = `
+    SELECT sessions.*, users.name as proxyFacultyName,
+      (SELECT COUNT(*) FROM attendance_records WHERE sessionId = sessions.id AND status = 'present') as presentCount,
+      (SELECT MIN(markedAt) FROM attendance_records WHERE sessionId = sessions.id) as firstLogTime,
+      (SELECT MAX(markedAt) FROM attendance_records WHERE sessionId = sessions.id) as lastLogTime
+    FROM sessions 
+    LEFT JOIN users ON sessions.proxyFacultyId = users.id 
+    WHERE facultyId = ? OR proxyFacultyId = ?
+    ORDER BY createdAt DESC
+  `;
+  db.all(query, [req.params.facultyId, req.params.facultyId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    rows.forEach(row => {
+      if (row.qrCode) {
+        row.qrCode = { code: row.qrCode, issuedAt: row.qrIssuedAt, expiresAt: row.qrExpiresAt };
+      }
+    });
+    res.json(rows);
+  });
+});
+
+
+
+
+// 8.5) Get All Sessions Today (For Proxy Conflict Checking)
+app.get('/api/sessions/today/all', requireRole(['faculty']), (req, res) => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  db.all(
+    `SELECT courseCode, batchTarget, facultyId, proxyFacultyId, status, slotId FROM sessions WHERE createdAt >= ?`,
+    [startOfDay.toISOString()],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
+
+// 9) Mark Attendance
+app.post('/api/attendance/mark', requireRole(['student']), attendanceLimiter, (req, res) => {
+  const { sessionId, code } = req.body;
+  const studentId = req.user.id; // SECURE: Extracted from verified JWT, cannot be spoofed!
+
+  db.all('SELECT * FROM sessions WHERE id = ? OR groupId = ?', [sessionId, sessionId], (err, sessions) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!sessions || sessions.length === 0) return res.status(404).json({ error: 'Session not found' });
+
+    // Use the first session to validate the QR code (since they all share the same QR/timing logic if grouped)
+    const baseSession = sessions[0];
+    if (baseSession.status !== 'active') return res.status(400).json({ error: 'sessionClosed', message: 'Session is not currently active.' });
+    
+    let metadata = {};
+    try { metadata = JSON.parse(baseSession.metadata || '{}'); } catch(e) {}
+    
+    if (metadata.qrCodes && Array.isArray(metadata.qrCodes)) {
+      const matchedQr = metadata.qrCodes.find(q => q.code === code);
+      if (!matchedQr) {
+        return res.status(400).json({ error: 'invalidQrCode', message: 'QR Code is invalid.' });
+      }
+      
+      const now = new Date();
+      // Allow a 4 second grace period for network latency and slow scanners
+      const expiresAt = new Date(new Date(matchedQr.expiresAt).getTime() + 4000); 
+      if (now > expiresAt) {
+        return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
+      }
+    } else {
+      // Fallback for old active sessions
+      if (baseSession.qrCode !== code && baseSession.previousQrCode !== code) return res.status(400).json({ error: 'invalidQrCode', message: 'QR Code is invalid or has expired.' });
+      if (new Date() > new Date(baseSession.qrExpiresAt)) return res.status(400).json({ error: 'qrExpired', message: 'This QR code has expired.' });
+    }
+
+    // Find all sessions in this group where the student is enrolled
+    const matchedSessions = sessions.filter(s => {
+      let enrolledIds = JSON.parse(s.enrolledStudentIds || '[]');
+      return enrolledIds.includes(studentId);
+    });
+
+    if (matchedSessions.length === 0) {
+      return res.status(400).json({ error: 'studentNotEnrolled', message: 'You are not enrolled in any class covered by this session.' });
+    }
+
+    const markedAt = new Date().toISOString();
+    let insertCount = 0;
+    let duplicateCount = 0;
+    let anyError = null;
+
+    // We can insert records for all matched sessions
+    matchedSessions.forEach(session => {
+      const aid = uuidv4();
+      db.run('INSERT INTO attendance_records (id, sessionId, studentId, markedAt, status, method) VALUES (?, ?, ?, ?, ?, ?)',
+        [aid, session.id, studentId, markedAt, 'pending', 'qr'],
+        function (err) {
+          if (err) {
+            // Support both SQLite ('UNIQUE') and Postgres ('duplicate key' or 'unique') error formats
+            if (err.message.includes('UNIQUE') || err.message.toLowerCase().includes('unique') || err.message.toLowerCase().includes('duplicate key')) {
+              duplicateCount++;
+            } else {
+              anyError = err;
+            }
+          } else {
+            insertCount++;
+          }
+          if (anyError && insertCount + duplicateCount === matchedSessions.length) {
+             return res.status(500).json({ error: anyError.message });
+          }
+          
+          if (insertCount + duplicateCount === matchedSessions.length) {
+            if (insertCount === 0 && duplicateCount > 0) {
+               return res.status(400).json({ error: 'duplicateAttendance', message: 'Attendance already marked.' });
+            }
+            res.json({
+              success: true,
+              message: 'Attendance marked successfully.',
+              record: {
+                id: aid,
+                sessionId: session.id,
+                studentId: studentId,
+                markedAt: markedAt,
+                status: 'pending',
+                method: 'qr'
+              }
+            });
+          }
+        }
+      );
+    });
+  });
+});
+
+// 9.5) Faculty Finalize Attendance
+app.post('/api/sessions/:id/attendance/finalize', requireRole(['faculty']), (req, res) => {
+  const sessionId = req.params.id;
+  const { updates } = req.body; // array of { studentId, status }
+
+  if (!updates || !Array.isArray(updates)) {
+    return res.status(400).json({ error: 'Invalid updates format' });
+  }
+
+  db.get('SELECT * FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    if (err || !session) return res.status(404).json({ error: 'Session not found' });
+
+    const timeString = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+
+    const stmt = db.prepare(`
+      INSERT INTO attendance_records (id, sessionId, studentId, markedAt, status, method)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(sessionId, studentId) DO UPDATE SET status = excluded.status
+    `);
+
+    db.serialize(() => {
+      updates.forEach(u => {
+        const aid = uuidv4();
+        stmt.run(aid, sessionId, u.studentId, new Date().toISOString(), u.status, 'manual');
+      });
+      stmt.finalize((err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.run(`UPDATE sessions SET status = 'completed' WHERE id = ?`, [sessionId]);
+
+        db.get('SELECT name FROM users WHERE id = ?', [session.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : session.facultyId;
+          const isLab = session.batchTarget && session.batchTarget.includes('Batch');
+          const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+          // Notify all students in this session that their attendance was updated
+          updates.forEach(u => {
+            const statusText = u.status.toUpperCase();
+            const isPending = session.approvalStatus === 'pending';
+            
+            const title = isPending ? 'Attendance On Hold' : 'Attendance Verified';
+            let body = isPending 
+              ? `Your attendance for ${formatSubjectName(session.courseCode)} is on hold pending original faculty approval.`
+              : `Marked as ${statusText} for ${formatSubjectName(session.courseCode)} at ${timeString}`;
+              
+            if (isLab && session.proxyFacultyId && !isPending) {
+               body = `Attendance for Lab recorded for student. Status of attendance record for the specified lab batch faculty ${facName}`;
+            }
+              
+            const tagColor = isPending ? 'tertiaryContainer' : (u.status === 'present' ? 'primaryContainer' : 'errorContainer');
+            const onTagColor = isPending ? 'onTertiaryContainer' : (u.status === 'present' ? 'onPrimaryContainer' : 'onErrorContainer');
+            
+            const icon = isPending ? 'pending_actions' : 'check_circle';
+            
+            notifStmt.run(uuidv4(), u.studentId, title, body, isPending ? 'On Hold' : statusText, tagColor, onTagColor, 'System', icon, new Date().toISOString());
+            sendPushNotification(u.studentId, title, body, { type: 'ATTENDANCE_MARKED', status: u.status, isPending: isPending.toString() });
+            notifyClients(u.studentId, { type: 'ATTENDANCE_UPDATED', sessionId, title, body });
+          });
+          notifStmt.finalize();
+
+          // If it was an auto-approved proxy, notify the original faculty NOW (upon submit)
+          if (session.proxyFacultyId && session.approvalStatus === 'approved' && session.facultyId !== session.proxyFacultyId) {
+             const now = new Date().toISOString();
+             const isSeminar = session.courseCode.toLowerCase().includes('seminar') || (session.batchTarget && session.batchTarget.includes(','));
+             db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
+                 const proxyName = row ? row.name : session.proxyFacultyId;
+                 const title = 'Proxy Session Completed (Auto-Approved)';
+                 const body = `${proxyName} has submitted attendance for the proxy session of your ${formatSubjectName(session.courseCode)} at ${session.batchTarget} and it was auto-approved${isSeminar ? ' (Seminar)' : ''}.`;
+                 db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   [uuidv4(), session.facultyId, title, body, 'Auto-Approved', 'successContainer', 'onSuccessContainer', proxyName, 'check_circle', now]);
+                 sendPushNotification(session.facultyId, title, body, { type: 'PROXY_AUTO_APPROVED' });
+             });
+          }
+          
+          // Notify the faculty who actually submitted the attendance, or ask Original Faculty for approval
+          if (session.proxyFacultyId && session.approvalStatus === 'pending' && session.facultyId !== session.proxyFacultyId) {
+             // Notify Original Faculty to approve it
+             db.get('SELECT name FROM users WHERE id = ?', [session.proxyFacultyId], (err, row) => {
+                 const proxyName = row ? row.name : session.proxyFacultyId;
+                 const title = 'Proxy Approval Required';
+                 const body = `${proxyName} has submitted attendance for your ${formatSubjectName(session.courseCode)} class. Please review and approve.`;
+                 db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   [uuidv4(), session.facultyId, title, body, 'Action Required', 'tertiaryContainer', 'onTertiaryContainer', proxyName, 'pending_actions', new Date().toISOString()]);
+                 sendPushNotification(session.facultyId, title, body, { type: 'PROXY_APPROVAL_REQUIRED' });
+                 notifyClients(session.facultyId, { type: 'PROXY_APPROVAL_REQUIRED', title, body });
+             });
+          } else {
+             // Regular submission notification to the submitter
+             const submitterId = session.proxyFacultyId || session.facultyId;
+             const submitterTitle = 'Attendance Submitted';
+             const submitterBody = `Attendance for ${formatSubjectName(session.courseCode)} has been successfully submitted.`;
+             db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+               [uuidv4(), submitterId, submitterTitle, submitterBody, 'Completed', 'successContainer', 'onSuccessContainer', 'System', 'check_circle', new Date().toISOString()]);
+             sendPushNotification(submitterId, submitterTitle, submitterBody, { type: 'ATTENDANCE_SUBMITTED' });
+             notifyClients(submitterId, { type: 'ATTENDANCE_SUBMITTED', title: submitterTitle, body: submitterBody });
+          }
+
+          res.json({ success: true, message: 'Attendance finalized successfully.' });
+        });
+      });
+    });
+  });
+});
+
+app.get('/sessions/:id/attendance', (req, res) => {
+  db.all(`SELECT * FROM attendance_records WHERE sessionId = ?`, [req.params.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/sessions/:id/attendance/details', (req, res) => {
+  const q = `
+    SELECT a.*, u.name as studentName, u.rollNo as studentRollNo 
+    FROM attendance_records a 
+    JOIN users u ON a.studentId = u.id 
+    WHERE a.sessionId = ?
+  `;
+  db.all(q, [req.params.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/sessions/:id/verification', (req, res) => {
+  const sessionId = req.params.id;
+  db.get('SELECT enrolledStudentIds FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    if (err || !session) return res.status(404).json({ error: 'Session not found' });
+
+    let enrolledIds = [];
+    try {
+      enrolledIds = JSON.parse(session.enrolledStudentIds);
+    } catch (e) { }
+
+    if (enrolledIds.length === 0) return res.json([]);
+
+    const placeholders = enrolledIds.map(() => '?').join(',');
+    const q = `
+      SELECT u.id as studentId, u.name, u.email, u.rollNo, u.division, u.electiveBatch, a.status, a.method 
+      FROM users u 
+      LEFT JOIN attendance_records a ON u.id = a.studentId AND a.sessionId = ?
+      WHERE u.id IN (${placeholders})
+    `;
+
+    db.all(q, [sessionId, ...enrolledIds], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  });
+});
+
+app.get('/api/report/excel/:id', requireRole(['faculty']), (req, res) => {
+  const sessionId = req.params.id;
+  db.get('SELECT id, courseCode, batchTarget, facultyId, createdAt, enrolledStudentIds FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    if (err || !session) return res.status(404).json({ error: 'Session not found' });
+
+    let enrolledIds = [];
+    try {
+      enrolledIds = JSON.parse(session.enrolledStudentIds);
+    } catch (e) { }
+
+    if (enrolledIds.length === 0) return res.status(400).json({ error: 'No enrolled students' });
+
+    // 1. Fetch all past & current sessions for this course, faculty, batchTarget to calculate totals
+    const qSessions = `SELECT id FROM sessions WHERE courseCode = ? AND facultyId = ? AND batchTarget = ? AND createdAt <= ?`;
+    db.all(qSessions, [session.courseCode, session.facultyId, session.batchTarget, session.createdAt], (err, pastSessions) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      const sessionIds = pastSessions.map(s => s.id);
+      const totalLectures = sessionIds.length;
+
+      // 2. Fetch attendance for ALL these sessions for these students
+      const placeholders = enrolledIds.map(() => '?').join(',');
+      const sPlaceholders = sessionIds.map(() => '?').join(',');
+      
+      db.all(`SELECT studentId, sessionId, status FROM attendance_records WHERE studentId IN (${placeholders}) AND sessionId IN (${sPlaceholders})`, [...enrolledIds, ...sessionIds], (err, allAttendance) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        // Map: studentId -> { currentStatus, totalPresent }
+        const statsMap = {};
+        enrolledIds.forEach(id => statsMap[id] = { currentStatus: 'A', totalPresent: 0 });
+
+        allAttendance.forEach(a => {
+          if (a.status === 'present') {
+            statsMap[a.studentId].totalPresent++;
+          }
+          if (a.sessionId === sessionId) {
+            statsMap[a.studentId].currentStatus = a.status === 'present' ? 'P' : 'A';
+          }
+        });
+
+        // 3. Fetch Student details (Ordered by rollNo ascending numerically)
+        db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, enrolledIds, async (err, students) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          const workbook = new exceljs.Workbook();
+          const worksheet = workbook.addWorksheet('Report');
+
+          worksheet.columns = [
+            { header: 'Roll No', key: 'rollNo', width: 15 },
+            { header: 'Name', key: 'name', width: 25 },
+            { header: 'Date', key: 'date', width: 15 },
+            { header: 'Type', key: 'type', width: 15 },
+            { header: 'Status', key: 'status', width: 10 },
+            { header: 'Total Sessions', key: 'totalSessions', width: 15 },
+            { header: 'Total Present', key: 'totalPresent', width: 15 },
+            { header: 'Attendance %', key: 'percentage', width: 15 }
+          ];
+
+          worksheet.columns.forEach(col => {
+            col.protection = { locked: true };
+          });
+
+          const dateStr = new Date(session.createdAt).toLocaleDateString('en-GB');
+          const typeStr = session.batchTarget.includes('All') ? 'Lecture' : 'Lab';
+
+          students.forEach(student => {
+            const stats = statsMap[student.id];
+            const pct = totalLectures === 0 ? '0%' : `${Math.round((stats.totalPresent / totalLectures) * 100)}%`;
+            worksheet.addRow({
+              rollNo: student.rollNo || 'N/A',
+              name: student.name || 'Unknown',
+              date: dateStr,
+              type: typeStr,
+              status: stats.currentStatus,
+              totalSessions: totalLectures,
+              totalPresent: stats.totalPresent,
+              percentage: pct
+            });
+          });
+
+          await worksheet.protect('vesit123', {
+            selectLockedCells: true,
+            selectUnlockedCells: false,
+            formatCells: false,
+            formatColumns: false,
+            formatRows: false,
+            insertColumns: false,
+            insertRows: false,
+            insertHyperlinks: false,
+            deleteColumns: false,
+            deleteRows: false,
+            sort: false,
+            autoFilter: false
+          });
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          res.setHeader('Content-Disposition', `attachment; filename="Report_${session.courseCode}.xlsx"`);
+          await workbook.xlsx.write(res);
+          res.end();
+        });
+      });
+    });
+  });
+});
+
+app.get('/api/debug/sessions', (req, res) => {
+  db.all('SELECT id, facultyId, proxyFacultyId, courseCode, batchTarget, createdAt FROM sessions ORDER BY createdAt DESC LIMIT 50', [], (err, rows) => {
+    res.json(rows);
+  });
+});
+
+app.get('/api/report/bulk-excel', requireRole(['faculty']), (req, res) => {
+  const { facultyId, subject, batchTarget, startDate, endDate } = req.query;
+  
+  if (!facultyId || !subject || !startDate || !endDate) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  // 1. Get all sessions matching criteria
+  // We use LIKE to match suffixes like " - Lecture" or " - Lab" since the frontend strips them
+  let q = `
+    SELECT id, courseCode, batchTarget, createdAt, enrolledStudentIds 
+    FROM sessions 
+    WHERE 1=1
+  `;
+  let params = [];
+
+  if (facultyId !== 'ALL') {
+    q += ` AND (facultyId = ? OR proxyFacultyId = ?) `;
+    params.push(facultyId, facultyId);
+  }
+
+  q += `
+      AND (
+        LOWER(TRIM(courseCode)) = LOWER(TRIM(?)) 
+        OR LOWER(TRIM(courseCode)) LIKE LOWER(TRIM(?)) || ' -%'
+      )
+      AND createdAt >= ? 
+      AND createdAt <= ?
+  `;
+  
+  // Ensure date ranges cover the whole day for string comparison
+  const startObj = new Date(startDate);
+  startObj.setHours(0, 0, 0, 0);
+  const endObj = new Date(endDate);
+  endObj.setHours(23, 59, 59, 999);
+  
+  params.push(subject, subject, startObj.toISOString(), endObj.toISOString());
+  
+  if (batchTarget && batchTarget !== 'All') {
+    q += ' AND LOWER(TRIM(batchTarget)) = LOWER(TRIM(?))';
+    params.push(batchTarget);
+  }
+  
+  q += ' ORDER BY createdAt ASC';
+
+  db.all(q, params, async (err, sessions) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (sessions.length === 0) return res.status(400).send('No sessions found in this date range');
+
+    // 2. Gather all unique enrolled student IDs across these sessions
+    let uniqueStudentIds = new Set();
+    sessions.forEach(s => {
+      try {
+        const ids = JSON.parse(s.enrolledStudentIds);
+        ids.forEach(id => uniqueStudentIds.add(id));
+      } catch(e) {}
+    });
+
+    if (uniqueStudentIds.size === 0) return res.status(400).send('No students enrolled in these sessions');
+
+    const studentIdsArr = Array.from(uniqueStudentIds);
+    const placeholders = studentIdsArr.map(() => '?').join(',');
+
+    // 3. Fetch student details (Ordered by rollNo ascending numerically)
+    db.all(`SELECT id, name, rollNo FROM users WHERE id IN (${placeholders}) ORDER BY CAST(rollNo AS INTEGER) ASC`, studentIdsArr, (err, students) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      // 4. Fetch all attendance records for these sessions
+      const sessionIds = sessions.map(s => s.id);
+      const sessionPlaceholders = sessionIds.map(() => '?').join(',');
+      db.all(`SELECT sessionId, studentId, status FROM attendance_records WHERE sessionId IN (${sessionPlaceholders})`, sessionIds, async (err, records) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        // Map records: map[studentId][sessionId] = status
+        const attendanceMap = {};
+        records.forEach(r => {
+          if (!attendanceMap[r.studentId]) attendanceMap[r.studentId] = {};
+          attendanceMap[r.studentId][r.sessionId] = r.status;
+        });
+
+        // 5. Generate Excel
+        const workbook = new exceljs.Workbook();
+        const worksheet = workbook.addWorksheet('Bulk Report');
+
+        // Metadata rows
+        const subjectRow = ['Subject', '', ...sessions.map(s => s.courseCode), '', '', ''];
+        const typeRow    = ['Type', '', ...sessions.map(s => {
+          let typeStr = s.batchTarget && s.batchTarget.includes('All') ? 'Lecture' : 'Lab';
+          if (s.courseCode.includes(' - ')) typeStr = s.courseCode.split(' - ').pop();
+          return typeStr;
+        }), '', '', ''];
+        const dayRow     = ['Day', '', ...sessions.map(s => new Date(s.createdAt).toLocaleDateString('en-US', { weekday: 'long' })), '', '', ''];
+        const dateRow    = ['Date', '', ...sessions.map(s => new Date(s.createdAt).toLocaleDateString('en-GB')), '', '', ''];
+        const timeRow    = ['Time', '', ...sessions.map(s => new Date(s.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })), '', '', ''];
+        
+        const headerRow  = ['Roll No', 'Name', ...sessions.map((s, i) => `Session ${i+1}`), 'Total Sessions', 'Total Present', 'Attendance %'];
+
+        worksheet.addRow(subjectRow);
+        worksheet.addRow(typeRow);
+        worksheet.addRow(dayRow);
+        worksheet.addRow(dateRow);
+        worksheet.addRow(timeRow);
+        worksheet.addRow(headerRow);
+
+        // Style the metadata and header rows
+        for (let i = 1; i <= 6; i++) {
+           worksheet.getRow(i).font = { bold: true };
+           if (i === 6) { // Only fill the actual column headers
+               worksheet.getRow(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+           }
+        }
+
+        // Merge cells for the first two columns in metadata rows to make them look like headers
+        for (let i = 1; i <= 5; i++) {
+           worksheet.mergeCells(`A${i}:B${i}`);
+           worksheet.getCell(`A${i}`).alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+
+        // Set column widths
+        worksheet.getColumn(1).width = 15; // Roll No
+        worksheet.getColumn(2).width = 25; // Name
+        for (let i = 0; i < sessions.length; i++) {
+          worksheet.getColumn(3 + i).width = 20; // Sessions
+          worksheet.getColumn(3 + i).alignment = { horizontal: 'center' };
+        }
+        worksheet.getColumn(3 + sessions.length).width = 15;
+        worksheet.getColumn(3 + sessions.length + 1).width = 15;
+        worksheet.getColumn(3 + sessions.length + 2).width = 15;
+
+        // Rows
+        students.forEach(student => {
+          const rowData = [student.rollNo || 'N/A', student.name || 'Unknown'];
+          let presentCount = 0;
+
+          sessions.forEach(s => {
+            const status = (attendanceMap[student.id] && attendanceMap[student.id][s.id]) || 'absent';
+            rowData.push(status === 'present' ? 'P' : 'A');
+            if (status === 'present') presentCount++;
+          });
+
+          const totalSessions = sessions.length;
+          rowData.push(totalSessions, presentCount, totalSessions === 0 ? '0%' : `${Math.round((presentCount / totalSessions) * 100)}%`);
+
+          worksheet.addRow(rowData);
+        });
+
+        // Apply strict password protection
+        const colCount = 5 + sessions.length;
+        for (let i = 1; i <= colCount; i++) {
+          worksheet.getColumn(i).protection = { locked: true };
+        }
+
+        await worksheet.protect('vesit123', {
+          selectLockedCells: true,
+          selectUnlockedCells: false,
+          formatCells: false,
+          formatColumns: false,
+          formatRows: false,
+          insertColumns: false,
+          insertRows: false,
+          insertHyperlinks: false,
+          deleteColumns: false,
+          deleteRows: false,
+          sort: false,
+          autoFilter: false
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="BulkReport_${subject}.xlsx"`);
+        
+        await workbook.xlsx.write(res);
+        res.end();
+      });
+    });
+  });
+});
+
+
+
+
+// Reset tokens are now stored in the database.
+// POST /forgot-password — verifies email exists, returns a 6-digit reset code
+app.post('/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  db.get(`SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)`, [email], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'No account found with this email' });
+
+    // Generate a 6-digit OTP
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL;
+    let expiryDate;
+    
+    if (isProduction) {
+      // Postgres TIMESTAMP expects 'YYYY-MM-DD HH:MM:SS' or ISO string
+      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    } else {
+      expiryDate = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    }
+    
+    // Auto-flush all globally expired tokens before inserting new one to keep DB clean
+    db.run(`DELETE FROM reset_tokens WHERE expiry < ?`, [new Date().toISOString()]);
+
+    // First delete any existing token for this email to avoid duplicate primary key on retry
+    db.run(`DELETE FROM reset_tokens WHERE LOWER(email) = LOWER(?)`, [row.email], (delErr) => {
+      // Insert new token
+      db.run(`INSERT INTO reset_tokens (token, email, expiry) VALUES (?, ?, ?)`, [token, row.email, expiryDate], (insertErr) => {
+        if (insertErr) return res.status(500).json({ error: 'Failed to generate reset token' });
+
+        // Send real OTP email
+        const htmlBody = `
+            <div style="font-family:sans-serif;max-width:480px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+              <div style="background:#002147;padding:24px;text-align:center">
+                <h2 style="color:#FFD700;margin:0;font-size:22px;letter-spacing:2px">AMS – VESIT</h2>
+                <p style="color:#fff;margin:4px 0 0;font-size:13px">Attendance Management System</p>
+              </div>
+              <div style="padding:28px">
+                <p style="font-size:15px;color:#333">Hi there,</p>
+                <p style="font-size:15px;color:#333">Use the code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                <div style="background:#f4f4f4;border-radius:10px;padding:20px;text-align:center;margin:24px 0">
+                  <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#002147">${token}</span>
+                </div>
+                <p style="font-size:13px;color:#888">If you didn't request this, you can safely ignore this email.</p>
+              </div>
+            </div>
+          `;
+
+        const payload = {
+          to: row.email,
+          subject: 'Your AMS Password Reset Code',
+          html: htmlBody,
+        };
+
+        // Post to the Google Apps Script URL
+        axios.post(process.env.APPS_SCRIPT_URL, payload)
+          .then((response) => {
+            if (response.data.status === 'success') {
+              console.log(`[RESET] OTP sent to ${row.email}`);
+              res.json({ message: 'Reset code sent to your email' });
+            } else {
+              throw new Error(response.data.message || 'Unknown Apps Script error');
+            }
+          })
+          .catch((mailErr) => {
+            console.error('[MAIL ERROR]', mailErr.message);
+            return res.status(500).json({ error: 'Failed to send reset email via Apps Script.' });
+          });
+      });
+    });
+  });
+});
+
+// POST /reset-password — verifies token and sets new password
+app.post('/reset-password', (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+
+  db.get(`SELECT * FROM reset_tokens WHERE token = ?`, [token], (err, record) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!record) return res.status(400).json({ error: 'Invalid or expired reset code' });
+    
+    if (new Date() > new Date(record.expiry)) {
+      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]);
+      return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+    }
+
+    db.run(`UPDATE users SET password = ? WHERE LOWER(email) = LOWER(?)`, [newPassword, record.email], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      db.run(`DELETE FROM reset_tokens WHERE token = ?`, [token]); // Single-use token
+      res.json({ message: 'Password updated successfully' });
+    });
+  });
+});
+
+// POST /change-password — verifies current password and sets new password
+app.post('/change-password', (req, res) => {
+  const { userId, currentPassword, newPassword } = req.body;
+  if (!userId || !currentPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+
+  db.get(`SELECT id FROM users WHERE id = ? AND password = ?`, [userId, currentPassword], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(401).json({ error: 'Incorrect current password' });
+
+    db.run(`UPDATE users SET password = ? WHERE id = ?`, [newPassword, userId], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Password updated successfully' });
+    });
+  });
+});
+
+// GET timetable slots for a student for a specific day
+app.get('/api/timetable/student/:studentId', requireRole(['student']), (req, res) => {
+  const { studentId } = req.params;
+  let { day } = req.query; // e.g., 'Mon', 'Tue'
+
+  db.get('SELECT division, coreBatch, electiveSubject, electiveBatch FROM users WHERE id = ?', [studentId], (err, student) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const { division, coreBatch, electiveSubject, electiveBatch } = student;
+
+    // Build a WHERE clause that matches any slot this student should see:
+    // 1. Division-level lecture (e.g. "D15A - All")
+    // 2. Division + coreBatch specific lab (e.g. "D15A - Batch A")
+    // 3. Elective lecture (e.g. "TE - Soft Computing (All)" or "TE - ADMT (All)")
+    // 4. Elective lab (e.g. "TE - Soft Computing (Batch A)" or "TE - ADMT (Batch A)")
+    // 5. Cross-division elective (e.g. "TE - ADMT (Batch A)" style)
+    const conditions = [];
+    const params = [];
+
+    if (division) {
+      conditions.push(`t.batchTarget = ?`);
+      params.push(`${division} - All`);
+
+      if (coreBatch) {
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`${division} - ${coreBatch}`);
+      }
+    }
+
+    if (electiveSubject) {
+      conditions.push(`t.batchTarget = ?`);
+      params.push(`TE - ${electiveSubject} (All)`);
+      if (electiveBatch) {
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`TE - ${electiveSubject} (${electiveBatch})`);
+      }
+      
+      // Handle ADMT aliases (e.g. if DB has 'Advanced Database Management Technologies' but timetable has 'ADMT')
+      if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+        const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+        conditions.push(`t.batchTarget = ?`);
+        params.push(`TE - ${alias} (All)`);
+        if (electiveBatch) {
+          conditions.push(`t.batchTarget = ?`);
+          params.push(`TE - ${alias} (${electiveBatch})`);
+        }
+      }
+    }
+
+    if (conditions.length === 0) {
+      return res.json([]);
+    }
+
+    let query = `
+      SELECT t.*, u.name as facultyName, u.email as facultyEmail
+      FROM timetable_slots t
+      JOIN users u ON t.facultyId = u.id
+      WHERE (${conditions.join(' OR ')})
+    `;
+
+    if (day) {
+      query += ` AND t.day = ?`;
+      params.push(day);
+    }
+
+    query += ` ORDER BY t.startTime ASC`;
+
+    db.all(query, params, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      // Also fetch any scheduled/active sessions for this student for today
+      // that might have been created manually by faculty
+      const activeQuery = `
+        SELECT s.*, u.name as facultyName, u.email as facultyEmail
+        FROM sessions s
+        LEFT JOIN users u ON s.facultyId = u.id
+        WHERE s.status IN ('scheduled', 'active') 
+          AND s.enrolledStudentIds LIKE ?
+      `;
+      db.all(activeQuery, [`%${studentId}%`], (err, activeSessions) => {
+        if (err) {
+          console.error("Error fetching active sessions for student:", err.message);
+          return res.json(rows); // fallback to just timetable slots
+        }
+        
+        const finalRows = [...rows];
+        
+        for (const s of activeSessions) {
+          let meta = {};
+          try { meta = JSON.parse(s.metadata || '{}'); } catch(e){}
+          
+          // Check if session belongs to today
+          const sessionDateStr = meta.date || s.createdAt.substring(0, 10);
+          const todayDateStr = new Date().toISOString().substring(0, 10);
+          
+          // If the day param is for today, check the date. (If not, we might not want to show it, but usually day is today).
+          // We'll just include it if it's scheduled/active right now.
+          
+          let type = 'Lecture';
+          if (s.courseCode && s.courseCode.toLowerCase().includes('lab')) type = 'Lab';
+          else if (s.batchTarget && s.batchTarget.includes('Batch')) type = 'Lab';
+          
+          // Avoid duplicating static slots that might have the exact same subject and time
+          const mappedSubject = s.courseCode ? s.courseCode.replace(' - Lab', '').replace(' - Lecture', '') : '';
+          const sTime = meta.startTime || s.startTime || '';
+          
+          const exists = finalRows.some(r => r.subject === mappedSubject && r.startTime === sTime);
+          
+          if (!exists) {
+            finalRows.push({
+              id: s.id,
+              facultyId: s.facultyId,
+              subject: mappedSubject,
+              day: day,
+              startTime: sTime,
+              endTime: meta.endTime || s.endTime || '',
+              type: type,
+              batchTarget: s.batchTarget,
+              facultyName: s.facultyName,
+              facultyEmail: s.facultyEmail,
+              isActiveSession: true
+            });
+          }
+        }
+        
+        // Sort by start time
+        finalRows.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+        
+        res.json(finalRows);
+      });
+    });
+  });
+});
+
+// GET student attendance history (Hybrid Approach)
+app.get('/api/attendance/student/:studentId/history', requireRole(['student']), (req, res) => {
+  const { studentId } = req.params;
+
+  // 1. Fetch closed & approved sessions where student is enrolled
+  const query = `
+    SELECT s.id as sessionId, s.courseCode, s.createdAt, s.facultyId, s.proxyFacultyId, s.slotId,
+           u.name as facultyName
+    FROM sessions s
+    LEFT JOIN users u ON s.facultyId = u.id
+    WHERE s.status IN ('active', 'closed', 'completed')
+      AND s.approvalStatus = 'approved'
+      AND s.enrolledStudentIds LIKE ?
+    ORDER BY s.createdAt DESC
+  `;
+  
+  db.all(query, [`%${studentId}%`], (err, sessions) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (sessions.length === 0) return res.json([]);
+
+    // 2. For each session, fetch if student attended
+    const sessionIds = sessions.map(s => s.sessionId);
+    const placeholders = sessionIds.map(() => '?').join(',');
+    
+    db.all(`SELECT sessionId, status, markedAt FROM attendance_records WHERE studentId = ? AND sessionId IN (${placeholders})`, [studentId, ...sessionIds], (err, records) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const attendanceMap = {};
+      const timeMap = {};
+      records.forEach(r => {
+        attendanceMap[r.sessionId] = r.status; // usually 'present'
+        timeMap[r.sessionId] = r.markedAt;
+      });
+
+      // 3. Match with timetable to get venue
+      db.get('SELECT division, coreBatch, electiveSubject, electiveBatch FROM users WHERE id = ?', [studentId], (err, student) => {
+        if (err || !student) return res.json([]);
+        
+        const { division, coreBatch, electiveSubject, electiveBatch } = student;
+        let validTargets = [
+          `${division} - All`,
+          `${division} - ${coreBatch}`,
+          `${division} - ${electiveBatch} (${electiveSubject})`,
+          `TE - ${electiveSubject} (All)`,
+          `TE - ${electiveSubject} (${electiveBatch})`
+        ];
+        
+        if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+          const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+          validTargets.push(`TE - ${alias} (All)`);
+          validTargets.push(`TE - ${alias} (${electiveBatch})`);
+        }
+        
+        const tPlaceholders = validTargets.map(() => '?').join(',');
+        const tQuery = `SELECT * FROM timetable_slots WHERE batchTarget IN (${tPlaceholders})`;
+        
+        db.all(tQuery, validTargets, (err, tSlots) => {
+          if (err) tSlots = [];
+          
+          const history = sessions.map(s => {
+            // Use markedAt if available, otherwise fallback to session creation time
+            const recordTime = timeMap[s.sessionId] ? new Date(timeMap[s.sessionId]) : new Date(s.createdAt);
+            
+            let venue = 'Campus';
+            let matchingSlot = null;
+            
+            if (s.slotId) {
+              matchingSlot = tSlots.find(t => t.id === s.slotId);
+            }
+            
+            // Fallback for older sessions without slotId
+            if (!matchingSlot) {
+              const dayStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }).format(recordTime);
+              matchingSlot = tSlots.find(t => 
+                t.facultyId === s.facultyId && 
+                t.day === dayStr && 
+                s.courseCode.includes(t.subject)
+              );
+            }
+            
+            if (matchingSlot) {
+              venue = matchingSlot.venue;
+            } else if (s.courseCode.toLowerCase().includes('seminar')) {
+              venue = 'Seminar Hall';
+            }
+            
+            // Format time in IST
+            const timeStr = recordTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+            
+            return {
+              sessionId: s.sessionId,
+              subject: (s.proxyFacultyId !== null && s.facultyId === s.proxyFacultyId) ? `${s.courseCode} (Proxy)` : s.courseCode,
+              time: timeStr,
+              location: venue,
+              professor: s.facultyName || 'Unknown Faculty',
+              status: attendanceMap[s.sessionId] === 'present' ? 'present' : 'missed',
+              date: recordTime.toISOString() // Use actual log time for date grouping
+            };
+          });
+          
+          res.json(history);
+        });
+      });
+    });
+  });
+});
+
+function notifyTimetableUpdate(facultyId, subject, batchTarget, day, slotId) {
+  db.get('SELECT name FROM users WHERE id = ?', [facultyId], (err, faculty) => {
+    if (err || !faculty) return;
+    const facultyName = faculty.name;
+    db.all('SELECT id, division, coreBatch, electiveSubject, electiveBatch FROM users WHERE role=\'student\'', [], (err, students) => {
+      if (err) return;
+      students.forEach(student => {
+        const { id: studentId, division, coreBatch, electiveSubject, electiveBatch } = student;
+        let validTargets = [
+          `${division} - All`,
+          `${division} - ${coreBatch}`,
+          `${division} - ${electiveBatch} (${electiveSubject})`,
+          `TE - ${electiveSubject} (All)`,
+          `TE - ${electiveSubject} (${electiveBatch})`
+        ];
+        
+        if (electiveSubject === 'Advanced Database Management Technologies' || electiveSubject === 'ADMT') {
+          const alias = electiveSubject === 'ADMT' ? 'Advanced Database Management Technologies' : 'ADMT';
+          validTargets.push(`TE - ${alias} (All)`);
+          validTargets.push(`TE - ${alias} (${electiveBatch})`);
+        }
+        if (validTargets.includes(batchTarget)) {
+          const notifId = uuidv4();
+          const title = `Timetable updated for ${subject}`;
+          const body = `Changes made by ${facultyName} for batch ${batchTarget}.`;
+
+          db.run(
+            'INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [notifId, studentId, title, body, 'Schedule Change', 'primaryContainer', 'onPrimaryContainer', facultyName, 'person', new Date().toISOString()],
+            (err) => {
+              if (!err) {
+                notifyClients(studentId, {
+                  type: 'TIMETABLE_UPDATED',
+                  title: 'Schedule Change',
+                  body: title,
+                  day: day,
+                  slotId: slotId
+                });
+                sendPushNotification(studentId, 'Schedule Change', title, { type: 'TIMETABLE_UPDATED', day: day, slotId: slotId });
+              }
+            }
+          );
+        }
+      });
+    });
+  });
+}
+
+function calculateEndTime(startTime, type) {
+  if (!startTime || !startTime.includes(':')) return startTime;
+  const parts = startTime.split(':');
+  let h = parseInt(parts[0], 10);
+  let m = parts[1];
+
+  if (type === 'Lab') {
+    h += 2;
+  } else {
+    h += 1; // Default for Lecture
+  }
+
+  if (h >= 24) h -= 24;
+
+  return `${h.toString().padStart(2, '0')}:${m}`;
+}
+
+
+function parseTimeStr(tStr) {
+  if (!tStr) return 0;
+  const parts = tStr.trim().split(' ');
+  const hm = parts[0].split(':').map(Number);
+  let hr = hm[0] || 0;
+  const min = hm[1] || 0;
+  if (parts.length > 1) {
+    const ampm = parts[1].toUpperCase();
+    if (ampm === 'PM' && hr < 12) hr += 12;
+    if (ampm === 'AM' && hr === 12) hr = 0;
+  }
+  return hr * 60 + min;
+}
+
+function checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, excludeId, callback) {
+  db.all('SELECT ts.*, u.name as facultyName FROM timetable_slots ts JOIN users u ON ts.facultyId = u.id WHERE ts.day = ?', [day], (err, slots) => {
+    if (err) return callback(err, null);
+    
+    const newStart = parseTimeStr(startTime);
+    const newEnd = parseTimeStr(endTime);
+
+    const checkNext = (index) => {
+      if (index >= slots.length) {
+        return callback(null, null); // No overlap
+      }
+
+      const slot = slots[index];
+      if (excludeId && slot.id === excludeId) return checkNext(index + 1);
+      
+      const st = slot.startTime || '00:00';
+      const et = slot.endTime || '00:00';
+      const slotStart = parseTimeStr(st);
+      const slotEnd = parseTimeStr(et);
+      
+      const overlaps = Math.max(newStart, slotStart) < Math.min(newEnd, slotEnd);
+      
+      if (overlaps) {
+        if (slot.facultyId === facultyId) {
+           return callback(null, `Conflict: You are already scheduled to teach '${slot.subject}' at ${st} (Venue: ${slot.venue}).`);
+        }
+        
+        // Use the exact same logic as sessions to see if there is ANY student who matches BOTH targets
+        const q1 = getSessionTargetStudents(subject, batchTarget);
+        const q2 = getSessionTargetStudents(slot.subject, slot.batchTarget);
+        
+        const overlapQuery = `SELECT 1 FROM users WHERE (${q1}) AND (${q2}) LIMIT 1`;
+        
+        db.get(overlapQuery, [], (err, overlapRow) => {
+          if (err) return callback(err, null);
+          if (overlapRow) {
+            const facName = slot.facultyName || slot.facultyId;
+            return callback(null, `Conflict: ${slot.batchTarget} is already scheduled for '${slot.subject}' with Prof. ${facName} at ${slot.startTime} (Venue: ${slot.venue}).`);
+          }
+          checkNext(index + 1);
+        });
+      } else {
+        checkNext(index + 1);
+      }
+    };
+
+    checkNext(0);
+  });
+}
+
+// GET all timetable slots (used by Timetable Manager)
+app.get('/api/timetable', requireRole(['student', 'faculty', 'faculty coordinator']), (req, res) => {
+  db.all(`
+    SELECT t.*, u.name as facultyName, u.email as facultyEmail 
+    FROM timetable_slots t 
+    LEFT JOIN users u ON t.facultyId = u.id
+  `, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// POST new timetable slot
+app.post('/api/timetable', (req, res) => {
+  const { facultyId, day, subject, type, batchTarget, venue, startTime } = req.body;
+  const endTime = calculateEndTime(startTime, type);
+  
+  checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, null, (err, conflictError) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (conflictError) return res.status(400).json({ error: conflictError });
+    
+    const id = uuidv4();
+    db.run(
+      'INSERT INTO timetable_slots (id, facultyId, day, subject, type, batchTarget, venue, startTime, endTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, facultyId, day, subject, type, batchTarget, venue, startTime, endTime],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        notifyTimetableUpdate(facultyId, subject, batchTarget, day, id);
+        res.json({ id });
+      }
+    );
+  });
+});
+
+// PUT update timetable slot
+app.put('/api/timetable/:id', (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  const { facultyId, day, subject, type, batchTarget, venue, startTime } = req.body;
+  const endTime = calculateEndTime(startTime, type);
+  
+  checkTimetableOverlap(facultyId, subject, day, batchTarget, startTime, endTime, id, (err, conflictError) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (conflictError) return res.status(400).json({ error: conflictError });
+
+    db.run(
+      'UPDATE timetable_slots SET day=?, subject=?, type=?, batchTarget=?, venue=?, startTime=?, endTime=? WHERE id=?',
+      [day, subject, type, batchTarget, venue, startTime, endTime, id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        notifyTimetableUpdate(facultyId, subject, batchTarget, day, id);
+        res.json({ success: true });
+      }
+    );
+  });
+});
+
+// DELETE timetable slot
+app.delete('/api/timetable/:id', (req, res) => {
+  const { id } = req.params; console.log("PUT timetable id:", id, "body:", req.body);
+  // We need facultyId, subject, batchTarget for notification before deleting
+  db.get('SELECT facultyId, subject, batchTarget, day FROM timetable_slots WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Slot not found' });
+
+    db.run('DELETE FROM timetable_slots WHERE id = ?', [id], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      notifyTimetableUpdate(row.facultyId, row.subject, row.batchTarget, row.day, null);
+      res.json({ success: true });
+    });
+  });
+});
+
+// GET timetable slots for a faculty
+// GET all timetable slots globally (for proxy QR generation)
+app.get('/timetable', (req, res) => {
+  db.all(`
+    SELECT t.*, u.name as facultyName
+    FROM timetable_slots t
+    JOIN users u ON u.id = t.facultyId
+    ORDER BY t.subject, t.type, t.batchTarget
+  `, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/timetable/:facultyId', (req, res) => {
+  const facultyId = req.params.facultyId;
+  const today = new Date().toISOString().split('T')[0];
+  const todayStart = `${today} 00:00:00`;
+  const todayEnd = `${today} 23:59:59`;
+
+  db.all(`SELECT * FROM timetable_slots WHERE facultyId = ?`, [facultyId], (err, slots) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    // Fetch today's sessions for this faculty to prevent duplicate QR generation
+    const checkQuery = `SELECT courseCode, batchTarget FROM sessions WHERE facultyId = ? AND createdAt >= ? AND createdAt <= ?`;
+
+    db.all(checkQuery, [facultyId, todayStart, todayEnd], (err, sessions) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      const enrichedSlots = slots.map(slot => {
+        // Find if there's any session today that matches this slot's subject and batchTarget
+        // Note: when a session is created from a slot, courseCode = slot.subject, and batchTarget = slot.batchTarget
+        const hasSessionToday = sessions.some(s => s.courseCode === slot.subject && s.batchTarget === slot.batchTarget);
+        return {
+          ...slot,
+          hasSessionToday
+        };
+      });
+      
+      res.json(enrichedSlots);
+    });
+  });
+});
+// GET notifications for a student
+app.get('/api/notifications/:userId', requireRole(['student']), (req, res) => {
+  db.all('SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC', [req.params.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// PUT mark notification as read
+app.put('/api/notifications/:id/read', requireRole(['student']), (req, res) => {
+  db.run('UPDATE notifications SET isRead = 1 WHERE id = ?', [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// PUT mark all notifications as read for user
+app.put('/api/notifications/user/:userId/read-all', requireRole(['student']), (req, res) => {
+  db.run('UPDATE notifications SET isRead = 1 WHERE userId = ?', [req.params.userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// GET student attendance stats with predictive margin calculations
+app.get('/api/attendance/student/:studentId/stats', requireRole(['student']), (req, res) => {
+  const rawId = req.params.studentId;
+
+  // Resolve: if looks like an email, map to UUID via users table; otherwise use as-is
+  const resolveId = (cb) => {
+    if (rawId.includes('@')) {
+      db.get(`SELECT id FROM users WHERE email = ?`, [rawId], (err, row) => {
+        if (err || !row) return cb(null, rawId); // fallback
+        cb(null, row.id);
+      });
+    } else {
+      cb(null, rawId);
+    }
+  };
+
+  resolveId((err, studentId) => {
+    // 1. Get all APPROVED sessions for this student (UUIDs stored in JSON array)
+    db.all(`SELECT id, courseCode FROM sessions WHERE enrolledStudentIds LIKE ? AND approvalStatus = 'approved'`, [`%"${studentId}"%`], (err, sessions) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const stats = {};
+      let overallTotal = 0;
+      sessions.forEach(s => {
+        let name = s.courseCode.trim();
+        let key = name.toLowerCase();
+        if (!key.endsWith(' - lab') && !key.endsWith(' - lecture')) {
+          key += ' - lecture';
+          name += ' - Lecture';
+        }
+
+        if (!stats[key]) stats[key] = { name: name, total: 0, attended: 0 };
+        stats[key].total++;
+        overallTotal++;
+      });
+
+      // 2. Get attended sessions
+      db.all(`
+        SELECT s.courseCode 
+        FROM attendance_records a
+        JOIN sessions s ON a.sessionId = s.id
+        WHERE a.studentId = ? AND a.status = 'present' AND s.approvalStatus = 'approved'
+      `, [studentId], (err, attendedRows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        let overallAttended = 0;
+        attendedRows.forEach(row => {
+          let key = row.courseCode.trim().toLowerCase();
+          if (!key.endsWith(' - lab') && !key.endsWith(' - lecture')) {
+            key += ' - lecture';
+          }
+
+          if (stats[key]) {
+            stats[key].attended++;
+            overallAttended++;
+          }
+        });
+
+        // Calculate margins and statuses
+        let subjects = Object.keys(stats).map(key => {
+          const s = stats[key];
+          const subject = s.name;
+          const t = s.total;
+          const a = s.attended;
+          const percentage = t > 0 ? (a / t) * 100 : 0;
+
+          let status = 'CRITICAL';
+          if (percentage >= 75.0) status = 'SAFE';
+          else if (percentage >= 50.0) status = 'WARNING';
+
+          let marginType = 'safe';
+          let marginAmount = 0;
+
+          // Target is 55%
+          if (percentage < 55.0) {
+            marginType = 'recover';
+            // ceil((0.55*total - attended) / 0.45)
+            marginAmount = Math.max(0, Math.ceil((0.55 * t - a) / 0.45));
+          } else {
+            marginType = 'safe';
+            // floor((attended - 0.55*total) / 0.55)
+            marginAmount = Math.max(0, Math.floor((a - 0.55 * t) / 0.55));
+          }
+
+          return {
+            courseCode: subject,
+            totalSessions: t,
+            attendedSessions: a,
+            totalClasses: t, // Add this for UI fallback
+            attendedClasses: a, // Add this for UI fallback
+            percentage: parseFloat(percentage.toFixed(2)),
+            status,
+            marginType,
+            marginAmount
+          };
+        });
+
+        let overallPercentage = overallTotal > 0 ? (overallAttended / overallTotal) * 100 : 0;
+
+        res.json({
+          overallPercentage: parseFloat(overallPercentage.toFixed(2)),
+          thisWeekPercentage: parseFloat(overallPercentage.toFixed(2)),
+          totalClasses: overallTotal, // Add root level classes
+          attendedClasses: overallAttended, // Add root level attended
+          subjects
+        });
+      });
+    });
+  });
+});
+
+// Case 3: Auto-Approve ignored proxy requests at 11:59 PM daily
+cron.schedule('59 23 * * *', () => {
+  console.log('Running daily proxy auto-approval cron job...');
+  
+  // Find all pending proxy sessions
+  db.all("SELECT * FROM sessions WHERE approvalStatus = 'pending'", [], (err, sessions) => {
+    if (err || !sessions) return;
+    
+    sessions.forEach(sessionRow => {
+      // Auto-approve the session
+      db.run(`UPDATE sessions SET approvalStatus = 'approved' WHERE id = ?`, [sessionRow.id], function (err) {
+        if (err) return;
+        
+        const now = new Date().toISOString();
+        
+        // Notify proxy faculty
+        db.get('SELECT name FROM users WHERE id = ?', [sessionRow.facultyId], (err, fac) => {
+          const facName = fac ? fac.name : sessionRow.facultyId;
+          const title = 'Proxy Auto-Approved';
+          const body = `Your proxy session for ${sessionRow.courseCode} was auto-approved because it wasn't reviewed.`;
+          
+          db.run('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), sessionRow.proxyFacultyId, title, body, 'Auto-Approved', 'primaryContainer', 'onPrimaryContainer', 'System', 'check_circle', now]);
+          sendPushNotification(sessionRow.proxyFacultyId, title, body, { type: 'PROXY_APPROVED' });
+
+          db.get('SELECT name FROM users WHERE id = ?', [sessionRow.proxyFacultyId], (err, pFac) => {
+            const proxyName = pFac ? pFac.name : sessionRow.proxyFacultyId;
+            
+            // Notify students
+            const enrolledIds = JSON.parse(sessionRow.enrolledStudentIds || '[]');
+            if (enrolledIds.length > 0) {
+              db.all('SELECT studentId, status FROM attendance_records WHERE sessionId = ?', [sessionRow.id], (err, records) => {
+                const statusMap = {};
+                if (records) records.forEach(r => statusMap[r.studentId] = r.status);
+                
+                const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, body, tag, tagColor, onTagColor, byName, byIcon, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                enrolledIds.forEach(studentId => {
+                  const status = statusMap[studentId] || 'absent';
+                  const isPresent = (status === 'present');
+                  const sTitle = 'Proxy Session Auto-Verified';
+                  const sBody = `The proxy lecture ${sessionRow.courseCode} by faculty ${proxyName} was auto-verified by the system. You were marked ${status.toUpperCase()}.`;
+                  const tagText = isPresent ? 'PRESENT' : 'ABSENT';
+                  const tagColor = isPresent ? 'primaryContainer' : 'errorContainer';
+                  const onTagColor = isPresent ? 'onPrimaryContainer' : 'onErrorContainer';
+                  
+                  notifStmt.run(uuidv4(), studentId, sTitle, sBody, tagText, tagColor, onTagColor, 'System', 'check_circle', now);
+                  sendPushNotification(studentId, sTitle, sBody, { type: 'ATTENDANCE_MARKED', status: status, isPending: 'false' });
+                });
+                notifStmt.finalize();
+              });
+            }
+          });
+        });
+      });
+    });
+  });
+}, {
+  scheduled: true,
+  timezone: "Asia/Kolkata"
+});
+
+if (require.main === module) {
+  app.listen(3000, () => {
+    console.log('Server running on port 3000');
+  });
+}
+module.exports = app;
+
+function handleSmartSeminarAttendance(req, res, session, userId, method) {
+  const meta = JSON.parse(session.metadata || '{}');
+  const { divisions, startTime, endTime } = meta;
+  const now = new Date().toISOString();
+
+  // Find the student's batches
+  db.get('SELECT division, coreBatch, electiveBatch FROM users WHERE id = ?', [userId], (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!divisions.includes(user.division)) {
+      return res.status(403).json({ error: 'You are not in the division for this seminar.' });
+    }
+
+    // Parse times
+    const startDt = new Date(startTime);
+    const endDt = new Date(endTime);
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    // Fallback to Friday if weekend (since Sat/Sun removed)
+    const dIdx = startDt.getDay() === 0 || startDt.getDay() === 6 ? 4 : startDt.getDay() - 1;
+    const todayStr = dayNames[dIdx];
+
+    const startTotalMins = startDt.getHours() * 60 + startDt.getMinutes();
+    const endTotalMins = endDt.getHours() * 60 + endDt.getMinutes();
+
+    // Query timetable for matching slots
+    db.all('SELECT * FROM timetable_slots WHERE day = ?', [todayStr], (err, slots) => {
+       if (err) return res.status(500).json({ error: err.message });
+
+       const matchingSlots = slots.filter(s => {
+          // Check if batch matches (All, coreBatch, or electiveBatch)
+          if (!s.batchTarget.includes(user.division)) return false;
+          
+          let matchesBatch = false;
+          if (s.batchTarget.includes('All')) matchesBatch = true;
+          if (user.coreBatch && s.batchTarget.includes(user.coreBatch)) matchesBatch = true;
+          if (user.electiveBatch && s.batchTarget.includes(user.electiveBatch)) matchesBatch = true;
+          if (!matchesBatch) return false;
+
+          // Check time overlap
+          const [sH, sM] = s.startTime.split(':').map(Number);
+          const [eH, eM] = s.endTime.split(':').map(Number);
+          const slotStart = sH * 60 + sM;
+          const slotEnd = eH * 60 + eM;
+
+          // Overlap if max(start1, start2) < min(end1, end2)
+          return Math.max(startTotalMins, slotStart) < Math.min(endTotalMins, slotEnd);
+       });
+
+       if (matchingSlots.length === 0) {
+          return res.status(400).json({ error: 'No scheduled lectures found for your batches in this time window.' });
+       }
+
+       // For each matching slot, generate a session if not exists, and mark attendance
+       let completedCount = 0;
+       
+       matchingSlots.forEach(slot => {
+          // Find or create session for this slot today
+          // We can use a deterministic ID based on slot.id and date
+          const subSessionId = `seminar_sub_${session.id}_${slot.id}`;
+          
+          db.run(`INSERT OR IGNORE INTO sessions (id, courseCode, facultyId, proxyFacultyId, status, createdAt, approvalStatus)
+                  VALUES (?, ?, ?, ?, 'scheduled', ?, 'approved')`,
+            [subSessionId, slot.subject, slot.facultyId, session.facultyId, now],
+            (err) => {
+               // Then insert attendance
+               const attId = uuidv4();
+               db.run(`INSERT OR IGNORE INTO attendance_records (id, sessionId, studentId, markedAt, status, method)
+                       VALUES (?, ?, ?, ?, 'present', ?)`,
+                 [attId, subSessionId, userId, now, method],
+                 (err) => {
+                    completedCount++;
+                    if (completedCount === matchingSlots.length) {
+                       res.json({ success: true, message: `Marked present for ${matchingSlots.length} overlapping classes.` });
+                    }
+                 }
+               );
+            }
+          );
+       });
+    });
+  });
+}

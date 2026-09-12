@@ -36,7 +36,7 @@ app/android/app/build/
 
 # Graphify
 graphify-out/cache/
-backend/firebase-service-account.json
-backend/temp_key*
+services/backend/firebase-service-account.json
+services/backend/temp_key*
 .vercel
 .env*
