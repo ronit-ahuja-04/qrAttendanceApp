@@ -9,8 +9,8 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = (userData) => {
-    if (userData.role !== 'faculty coordinator') {
-      throw new Error('Only Faculty Coordinators can access the Admin Portal');
+    if (userData.role !== 'admin') {
+      throw new Error('Only Admins can access the Admin Portal');
     }
     setUser(userData);
     localStorage.setItem('admin_user', JSON.stringify(userData));
