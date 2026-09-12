@@ -49,6 +49,23 @@ app.use(cors({
 app.use(helmet());
 app.use(apiLimiter);
 
+// Auto-create default admin account if it doesn't exist
+db.get(`SELECT id FROM users WHERE email = 'admin@ves.ac.in'`, (err, row) => {
+  if (!err && !row) {
+    const id = require('crypto').randomUUID();
+    db.run(
+      `INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)`,
+      [id, 'System Admin', 'admin@ves.ac.in', 'AdminTest123!', 'admin'],
+      (err) => {
+        if (!err) console.log('Default admin account auto-created successfully.');
+      }
+    );
+  } else if (row) {
+    // Ensure the password and role are set correctly in case of a bug
+    db.run(`UPDATE users SET role = 'admin', password = 'AdminTest123!' WHERE id = ?`, [row.id]);
+  }
+});
+
 // Helper to format subject names
 function formatSubjectName(name) {
   if (!name) return name;
