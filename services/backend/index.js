@@ -78,7 +78,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/api/admin/reset-devices', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/reset-devices', requireRole(['admin']), (req, res) => {
   db.run(`UPDATE users SET deviceId = NULL WHERE role = 'student'`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
     notifyClients(null, { type: 'FORCE_LOGOUT', message: 'Admin has reset all devices.' });
@@ -86,7 +86,7 @@ app.get('/api/admin/reset-devices', requireRole(['faculty coordinator']), (req, 
   });
 });
 
-app.get('/api/admin/dump-devices', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/dump-devices', requireRole(['admin']), (req, res) => {
   db.all(`SELECT email, role, deviceId FROM users WHERE role = 'student'`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
@@ -244,14 +244,14 @@ app.post('/update-notification-prefs', (req, res) => {
 });
 
 // Admin endpoints for Device Management (Requires Faculty/Admin)
-app.get('/api/admin/device-lock', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/device-lock', requireRole(['admin']), (req, res) => {
   db.get(`SELECT value FROM settings WHERE key = 'device_registration_locked'`, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ locked: row && row.value === 'true' });
   });
 });
 
-app.post('/api/admin/device-lock', requireRole(['faculty coordinator']), (req, res) => {
+app.post('/api/admin/device-lock', requireRole(['admin']), (req, res) => {
   const { locked } = req.body;
   if (locked === undefined) return res.status(400).json({ error: 'Missing locked parameter' });
   
@@ -262,14 +262,14 @@ app.post('/api/admin/device-lock', requireRole(['faculty coordinator']), (req, r
   });
 });
 
-app.get('/api/admin/students', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/students', requireRole(['admin']), (req, res) => {
   db.all(`SELECT id, name, rollNo, email, deviceId FROM users WHERE role = 'student' ORDER BY rollNo ASC`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-app.post('/api/admin/unbind-student', requireRole(['faculty coordinator']), (req, res) => {
+app.post('/api/admin/unbind-student', requireRole(['admin']), (req, res) => {
   const { studentId } = req.body;
   if (!studentId) return res.status(400).json({ error: 'Missing studentId' });
 
@@ -283,21 +283,21 @@ app.post('/api/admin/unbind-student', requireRole(['faculty coordinator']), (req
   });
 });
 
-app.get('/api/admin/faculty', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/faculty', requireRole(['admin']), (req, res) => {
   db.all(`SELECT id, name, email, role FROM users WHERE role = 'faculty' ORDER BY name ASC`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-app.get('/api/admin/scopes', requireRole(['faculty coordinator']), (req, res) => {
+app.get('/api/admin/scopes', requireRole(['admin']), (req, res) => {
   db.all(`SELECT * FROM timetable_slots`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-app.post('/api/admin/scopes', requireRole(['faculty coordinator']), (req, res) => {
+app.post('/api/admin/scopes', requireRole(['admin']), (req, res) => {
   const { facultyId, subject, batchTarget, type } = req.body;
   if (!facultyId || !subject) return res.status(400).json({ error: 'Missing parameters' });
   const id = require('crypto').randomUUID();
@@ -309,7 +309,34 @@ app.post('/api/admin/scopes', requireRole(['faculty coordinator']), (req, res) =
   });
 });
 
-app.delete('/api/admin/scopes/:id', requireRole(['faculty coordinator']), (req, res) => {
+app.delete('/api/admin/scopes/:id', requireRole(['admin']), (req, res) => {
+  db.run(`DELETE FROM timetable_slots WHERE id = ?`, [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Admin Timetable APIs
+app.get('/api/admin/timetable', requireRole(['admin']), (req, res) => {
+  db.all(`SELECT t.*, u.name as facultyName FROM timetable_slots t JOIN users u ON t.facultyId = u.id ORDER BY t.day, t.startTime`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/timetable', requireRole(['admin']), (req, res) => {
+  const { facultyId, day, subject, type, batchTarget, venue, startTime, endTime } = req.body;
+  if (!facultyId || !day || !subject || !startTime || !endTime) return res.status(400).json({ error: 'Missing fields' });
+  const id = uuidv4();
+  db.run(`INSERT INTO timetable_slots (id, facultyId, day, subject, type, batchTarget, venue, startTime, endTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, facultyId, day, subject, type || 'Lecture', batchTarget || 'All', venue || 'Room', startTime, endTime], 
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id });
+  });
+});
+
+app.delete('/api/admin/timetable/:id', requireRole(['admin']), (req, res) => {
   db.run(`DELETE FROM timetable_slots WHERE id = ?`, [req.params.id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });

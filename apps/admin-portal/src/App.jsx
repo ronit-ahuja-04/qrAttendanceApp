@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import DeviceManager from './pages/DeviceManager';
 import FacultyScopeManager from './pages/FacultyScopeManager';
+import TimetableManager from './pages/TimetableManager';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="devices" element={<DeviceManager />} />
             <Route path="faculty" element={<FacultyScopeManager />} />
+            <Route path="timetable" element={<TimetableManager />} />
           </Route>
         </Routes>
       </BrowserRouter>

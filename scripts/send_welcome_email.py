@@ -7,18 +7,18 @@ def send_welcome_email():
     password = None
     
     try:
-        with open('backend/.env', 'r') as f:
+        with open('services/backend/.env', 'r') as f:
             for line in f:
                 if line.startswith('MAIL_USER='):
                     user = line.strip().split('=', 1)[1]
                 elif line.startswith('MAIL_PASS='):
                     password = line.strip().split('=', 1)[1]
     except FileNotFoundError:
-        print("Error: backend/.env file not found")
+        print("Error: services/backend/.env file not found")
         return
 
     if not user or not password:
-        print("Error: SMTP credentials not found in backend/.env")
+        print("Error: SMTP credentials not found in services/backend/.env")
         return
 
     recipient = "2024.ronit.ahuja@ves.ac.in"

@@ -40,3 +40,5 @@ services/backend/firebase-service-account.json
 services/backend/temp_key*
 .vercel
 .env*
+*.sqlite
+*.sqlite-*

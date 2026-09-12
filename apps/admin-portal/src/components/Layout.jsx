@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Lock, Users, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Lock, Users, LogOut, Shield, Calendar } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -16,6 +16,7 @@ export default function Layout() {
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/devices', icon: Lock, label: 'Device Security' },
     { to: '/faculty', icon: Users, label: 'Faculty Scopes' },
+    { to: '/timetable', icon: Calendar, label: 'Timetables' },
   ];
 
   return (
