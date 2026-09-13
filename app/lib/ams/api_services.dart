@@ -322,12 +322,17 @@ class ApiSessionService {
         NotificationService().connectSse(user.id);
         return user;
       } else {
+        String? errorMessage;
         try {
-          final error = jsonDecode(response.body)['error'];
-          if (error != null) throw Exception(error);
+          errorMessage = jsonDecode(response.body)['error'];
         } catch (_) {}
+        
+        if (errorMessage != null) {
+          throw Exception(errorMessage);
+        } else {
+          throw Exception('Failed to connect to the server (Status: ${response.statusCode})');
+        }
       }
-      return null;
     } catch (e) {
       print('LOGIN ERROR: $e');
       rethrow;
