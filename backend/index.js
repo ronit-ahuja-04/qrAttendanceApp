@@ -497,7 +497,7 @@ app.post('/login', loginLimiter, (req, res) => {
         db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
           if (err) return res.status(500).json({ error: err.message });
           if (existing) {
-            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+            return res.status(403).json({ error: `Your device is bounded to the login id ${existing.name}!` });
           }
           // Bind new device
           db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
@@ -511,7 +511,7 @@ app.post('/login', loginLimiter, (req, res) => {
         db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
           if (err) return res.status(500).json({ error: err.message });
           if (existing) {
-            return res.status(403).json({ error: `This device is already registered to another student (${existing.name}). One device per student allowed.` });
+            return res.status(403).json({ error: `Your device is bounded to the login id ${existing.name}!` });
           }
           
           db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
