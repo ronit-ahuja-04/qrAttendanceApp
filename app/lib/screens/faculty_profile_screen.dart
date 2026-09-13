@@ -9,7 +9,7 @@ import 'update_profile_picture_screen.dart';
 import 'change_password_screen.dart';
 import 'faculty_notifications_screen.dart';
 import 'faculty_timetable_manager_screen.dart';
-import 'faculty_device_manager_screen.dart';
+
 
 /// Faculty Profile & Digital ID Badge — mirrors the Stitch export
 /// (code.html): circular avatar with camera-edit badge, name, staff ID
@@ -85,15 +85,7 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                       },
                     ),
                   if (user?.role != 'student') const SizedBox(height: 12),
-                  if (user?.role != 'student')
-                    _SettingsButton(
-                      icon: Icons.phone_android,
-                      label: 'Manage Devices (Unbind)',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const FacultyDeviceManagerScreen()),
-                      ),
-                    ),
-                  if (user?.role != 'student') const SizedBox(height: 12),
+
                   _SettingsButton(
                     icon: Icons.notifications_none_outlined,
                     label: 'Push Notifications',
