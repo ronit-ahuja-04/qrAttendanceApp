@@ -87,7 +87,7 @@ class _FacultyProfileScreenState extends State<FacultyProfileScreen> {
                   if (user?.role != 'student') const SizedBox(height: 12),
                   if (user?.role != 'student')
                     _SettingsButton(
-                      icon: Icons.devices_other_outlined,
+                      icon: Icons.phone_android,
                       label: 'Manage Devices (Unbind)',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const FacultyDeviceManagerScreen()),

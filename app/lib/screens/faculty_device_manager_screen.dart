@@ -102,7 +102,7 @@ class _FacultyDeviceManagerScreenState extends State<FacultyDeviceManagerScreen>
                       controller: _rollNoController,
                       label: 'Student Roll No',
                       hint: 'e.g., 2022.ronit.ahuja',
-                      icon: Icons.person_search,
+                      icon: Icons.person,
                     ),
                     const SizedBox(height: 24),
                     VesitButton(
