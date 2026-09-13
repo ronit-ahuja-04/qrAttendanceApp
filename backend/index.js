@@ -492,42 +492,31 @@ app.post('/login', loginLimiter, (req, res) => {
 
     // Check device binding for students
     if (row.role === 'student' && deviceId) {
-      if (!row.deviceId) {
-        // Enforce 1-device-to-1-student rule: check if device is already claimed
-        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
-          if (err) return res.status(500).json({ error: err.message });
-          if (existing) {
-            return res.status(403).json({ error: `Your device is bounded to the login id ${existing.name}!` });
-          }
-          // Bind new device
+      if (row.deviceId && row.deviceId !== deviceId) {
+        // STRICT BINDING: The account is already bound to a different device!
+        return res.status(403).json({ error: 'This account is already bound to another device! Please contact administration to unbind.' });
+      }
+
+      // Check if the device is already claimed by SOMEONE ELSE
+      db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student' AND id != ?`, [deviceId, row.id], (err, existing) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (existing) {
+          // STRICT BINDING: The device is already claimed
+          return res.status(403).json({ error: `Your device is already bounded to the login id ${existing.name}!` });
+        }
+
+        if (!row.deviceId) {
+          // Bind the device for the first time
           db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
             if (updateErr) return res.status(500).json({ error: 'Failed to bind device' });
             row.deviceId = deviceId;
             finalizeLogin();
           });
-        });
-      } else if (row.deviceId !== deviceId) {
-        // Mismatch: Gracefully shift login to new device
-        db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student'`, [deviceId], (err, existing) => {
-          if (err) return res.status(500).json({ error: err.message });
-          if (existing) {
-            return res.status(403).json({ error: `Your device is bounded to the login id ${existing.name}!` });
-          }
-          
-          db.run(`UPDATE users SET deviceId = ? WHERE id = ?`, [deviceId, row.id], (updateErr) => {
-            if (updateErr) return res.status(500).json({ error: 'Failed to bind new device' });
-            
-            // Broadcast FORCE_LOGOUT to kick out the old device instantly
-            notifyClients(row.id, { type: 'FORCE_LOGOUT', message: 'Your account was logged in from another device.' });
-            
-            row.deviceId = deviceId;
-            finalizeLogin();
-          });
-        });
-      } else {
-        // Matches successfully
-        finalizeLogin();
-      }
+        } else {
+          // Matches successfully
+          finalizeLogin();
+        }
+      });
     } else {
       // Faculty or no deviceId provided (shouldn't happen with updated app)
       finalizeLogin();
