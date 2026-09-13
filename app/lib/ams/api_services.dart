@@ -321,17 +321,16 @@ class ApiSessionService {
         final user = User.fromJson(jsonDecode(response.body));
         NotificationService().connectSse(user.id);
         return user;
-      } else if (response.statusCode == 403) {
-        final error = jsonDecode(response.body)['error'];
-        throw Exception(error);
+      } else {
+        try {
+          final error = jsonDecode(response.body)['error'];
+          if (error != null) throw Exception(error);
+        } catch (_) {}
       }
       return null;
     } catch (e) {
-      if (e.toString().contains('This device is already registered') || e.toString().contains('bound to another device') || e.toString().contains('bounded to the login id')) {
-        rethrow;
-      }
       print('LOGIN ERROR: $e');
-      return null;
+      rethrow;
     }
   }
 
