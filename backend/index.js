@@ -2484,6 +2484,27 @@ cron.schedule('59 23 * * *', () => {
   timezone: "Asia/Kolkata"
 });
 
+// --- Add Device Unbind Endpoint for Faculty ---
+app.post('/api/faculty/unbind-device', (req, res) => {
+  const { rollNo } = req.body;
+  if (!rollNo) return res.status(400).json({ error: 'Student Roll No is required' });
+
+  // Update the student with the matching rollNo
+  db.run(`UPDATE users SET deviceId = NULL WHERE role = 'student' AND UPPER(rollNo) = ?`, [rollNo.toUpperCase()], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Student not found or already unbound' });
+    
+    // Notify clients in case the user is currently logged in, to log them out
+    db.get(`SELECT id FROM users WHERE role = 'student' AND UPPER(rollNo) = ?`, [rollNo.toUpperCase()], (err, user) => {
+      if (user) {
+        notifyClients(user.id, { type: 'FORCE_LOGOUT', message: 'Your device was manually unbound by faculty.' });
+      }
+    });
+
+    res.json({ message: 'Device unbound successfully for ' + rollNo.toUpperCase() });
+  });
+});
+
 if (require.main === module) {
   app.listen(3000, () => {
     console.log('Server running on port 3000');
