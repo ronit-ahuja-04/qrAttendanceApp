@@ -37,7 +37,7 @@ class _FacultyDeviceManagerScreenState extends State<FacultyDeviceManagerScreen>
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
+      final response = await httpClient.post(
         Uri.parse('$baseUrl/api/faculty/unbind-device'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'rollNo': rollNo}),
@@ -86,7 +86,7 @@ class _FacultyDeviceManagerScreenState extends State<FacultyDeviceManagerScreen>
     setState(() => _isLoadingClass = true);
 
     try {
-      final response = await http.post(
+      final response = await httpClient.post(
         Uri.parse('$baseUrl/api/faculty/unbind-division'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'division': division}),
@@ -135,7 +135,7 @@ class _FacultyDeviceManagerScreenState extends State<FacultyDeviceManagerScreen>
     });
 
     try {
-      final response = await http.get(
+      final response = await httpClient.get(
         Uri.parse('$baseUrl/api/faculty/students-by-division?division=${Uri.encodeComponent(division)}'),
       );
 
