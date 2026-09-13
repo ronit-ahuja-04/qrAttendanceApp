@@ -30,7 +30,7 @@ class _FacultyDeviceManagerScreenState extends State<FacultyDeviceManagerScreen>
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiSessionService().baseUrl}/api/faculty/unbind-device'),
+        Uri.parse('$baseUrl/api/faculty/unbind-device'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'rollNo': rollNo}),
       );
