@@ -41,7 +41,7 @@ class NotificationService {
     
     if (!kIsWeb) {
       const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
+          AndroidInitializationSettings('@mipmap/launcher_icon');
 
       const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings();
 
@@ -280,10 +280,10 @@ class NotificationService {
               'ams_channel_v2', 'AMS Notifications',
               importance: Importance.max,
               priority: Priority.high,
+              icon: '@mipmap/launcher_icon',
               color: Color(0xFF002147),
               enableVibration: true,
               playSound: true,
-              fullScreenIntent: true,
               showWhen: true);
               
       const NotificationDetails platformChannelSpecifics =
