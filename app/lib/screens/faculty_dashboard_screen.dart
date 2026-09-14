@@ -1202,6 +1202,12 @@ class _UpcomingSessionsList extends StatelessWidget {
       SessionStatus? existingStatus;
       dynamic sessionData;
       for (var ts in allSessions) {
+        if (ts.createdAt.year != now.year ||
+            ts.createdAt.month != now.month ||
+            ts.createdAt.day != now.day) {
+          continue;
+        }
+
         final slotId = s['id'] ?? s['_id'];
         if (ts.slotId != null && ts.slotId!.isNotEmpty && slotId != null) {
           if (ts.slotId == slotId) {
