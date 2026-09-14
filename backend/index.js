@@ -501,8 +501,20 @@ app.post('/login', loginLimiter, (req, res) => {
       db.get(`SELECT name FROM users WHERE deviceId = ? AND role = 'student' AND id != ?`, [deviceId, row.id], (err, existing) => {
         if (err) return res.status(500).json({ error: err.message });
         if (existing) {
+          // Format name from "LAST FIRST MIDDLE" to "First Last"
+          const formatName = (nameStr) => {
+            if (!nameStr) return '';
+            const parts = nameStr.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              const first = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+              const last = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
+              return `${first} ${last}`;
+            }
+            return nameStr.charAt(0).toUpperCase() + nameStr.slice(1).toLowerCase();
+          };
+          const formattedName = formatName(existing.name);
           // STRICT BINDING: The device is already claimed
-          return res.status(403).json({ error: `Your device is already bounded to the login id ${existing.name}!` });
+          return res.status(403).json({ error: `Your device is already bounded to the login id ${formattedName}!` });
         }
 
         if (!row.deviceId) {

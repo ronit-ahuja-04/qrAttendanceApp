@@ -57,7 +57,7 @@ class NotificationService {
       
       // Create the high importance channel explicitly for FCM background notifications
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'ams_channel_id', // id
+        'ams_channel_v2', // id
         'AMS Notifications', // title
         importance: Importance.max,
         enableVibration: true,
@@ -277,7 +277,7 @@ class NotificationService {
       // This will force the OS head-up notification even if the app is in the foreground.
       const AndroidNotificationDetails androidPlatformChannelSpecifics =
           AndroidNotificationDetails(
-              'ams_channel_id', 'AMS Notifications',
+              'ams_channel_v2', 'AMS Notifications',
               importance: Importance.max,
               priority: Priority.high,
               color: Color(0xFF002147),
